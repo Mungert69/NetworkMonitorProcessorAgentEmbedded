@@ -45,6 +45,10 @@ jobs:
           idf.py -D SDKCONFIG=sdkconfig.production build
           test -s build/networkmonitor_processor_esp32.bin
       - name: Run specialized Brotli tests
+        # The ESP-IDF installer prepends the Xtensa toolchain to PATH. These
+        # are host tests; force the runner's native compiler and assembler.
+        env:
+          PATH: /usr/bin:/bin
         run: |
           cmake -S . -B build-q0-tests -DNM_TEST_BROTLI_Q0=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-Os -fsanitize=address,undefined -fno-omit-frame-pointer'
           cmake --build build-q0-tests -j 2
