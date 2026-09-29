@@ -13,12 +13,11 @@ The board also needs a USB data connection and a 2.4 GHz Wi-Fi network.
 
 ## First-time setup
 
-Download the **Live factory image** from the
+Download the versioned **Live factory `.bin`** and `SHA256SUMS.txt` from the
 [latest GitHub release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest).
-The archive contains one `.bin` for first installation, with the signed
-firmware application, Live service settings, and interactive Wi-Fi setup
-already included. The image does not contain a
-Wi-Fi password, account token, or processor identity. Follow the concise
+The single `.bin` contains the signed firmware application, Live service
+settings, and interactive Wi-Fi setup. It does not contain a Wi-Fi password,
+account token, or processor identity. Follow the concise
 [first-board setup guide](docs/first-physical-board.md); it covers flashing,
 the serial OAuth sign-in, and assigning hosts. Do not use this factory image
 to update an enrolled board; use **Profile → Device firmware** instead.

@@ -7,10 +7,9 @@ appsettings editing is required.
 
 ## 1. Download the factory image
 
-Download `networkmonitor-esp32-s3-live-factory.zip` from the
+Download the versioned factory `.bin` and `SHA256SUMS.txt` from the
 [latest GitHub release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest).
-Extract it. The archive contains one versioned factory `.bin` and
-`SHA256SUMS.txt`. Verify the image before flashing:
+Keep both files in the same directory and verify the image before flashing:
 
 ```sh
 sha256sum -c SHA256SUMS.txt

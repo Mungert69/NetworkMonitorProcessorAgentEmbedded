@@ -10,7 +10,6 @@ import re
 import subprocess
 import sys
 import tempfile
-import zipfile
 
 from nvs_config import generate
 
@@ -69,10 +68,9 @@ def main() -> None:
         "--keyfile", str(key_path), str(app_path),
     ], check=True)
     image_name = f"networkmonitor-esp32-s3-live-factory-{version}.bin"
-    zip_name = "networkmonitor-esp32-s3-live-factory.zip"
     image_path = output_dir / image_name
-    zip_path = output_dir / zip_name
-    if image_path.exists() or zip_path.exists():
+    sums_path = output_dir / "SHA256SUMS.txt"
+    if image_path.exists() or sums_path.exists():
         raise FileExistsError("refusing to overwrite an existing release artifact")
 
     os.umask(0o077)
@@ -95,17 +93,11 @@ def main() -> None:
         ], check=True)
 
     image_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()
-    sums_path = output_dir / "SHA256SUMS.txt"
     sums_path.write_text(f"{image_hash}  {image_name}\n", encoding="ascii")
-    with zipfile.ZipFile(zip_path, "x", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.write(image_path, image_name)
-        archive.write(sums_path, "SHA256SUMS.txt")
     image_path.chmod(0o644)
-    zip_path.chmod(0o644)
-    sums_path.unlink()
+    sums_path.chmod(0o644)
     print(f"Created {image_path}")
     print(f"SHA256 {image_hash}")
-    print(f"Created {zip_path}")
 
 
 if __name__ == "__main__":
