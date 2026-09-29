@@ -1,15 +1,15 @@
 # NetworkMonitor ESP32-S3 processor
 
-Coding agents: read [AGENTS.md](AGENTS.md) before making changes. It documents
+Coding agents: read [AGENTS.md](../AGENTS.md) before making changes. It documents
 module responsibilities, C/SOLID design rules, ownership and required validation.
 
-See [the ESP32 guide](docs/guide.md) for explicit dev/live configuration,
+See [the ESP32 guide](guide.md) for explicit dev/live configuration,
 firmware builds, physical flashing, isolated emulator instances, and OTA releases.
-For a new physical board, follow the [first-board procedure](docs/first-physical-board.md).
+For a new physical board, follow the [first-board procedure](first-physical-board.md).
 
 There is only one processor implementation here: `firmware/main/`.
 Broker permissions and backend signing setup are documented in
-[backend integration](docs/backend-integration.md).
+[backend integration](backend-integration.md).
 
 ```text
 firmware/           ESP-IDF project, native code and public config templates
@@ -47,10 +47,10 @@ requires the .NET backend checkout, local ESP-IDF 6.1 and esp-emu;
 `tests/integration/test_serial_emulator.py` requires built firmware (including
 its matching ELF for BLE interception), local ESP-IDF 6.1 through EIM and esp-emu. Host
 test results are not firmware/emulator test results.
-The standalone [HTTP deadline tests](tests/integration/http_deadline/README.md)
+The standalone [HTTP deadline tests](../tests/integration/http_deadline/README.md)
 exercise the real ESP-IDF HTTP/TLS stack against local fault-injection servers,
 without processor credentials or a broker.
-See [monitoring parity](docs/monitoring-parity.md) for the reference contracts,
+See [monitoring parity](monitoring-parity.md) for the reference contracts,
 failure tests and deliberate embedded adaptations.
 
 Monitoring uses typed C records and bounded collections (`monitor_model.h`),
@@ -71,7 +71,7 @@ mbedTLS allocations use PSRAM. RTOS control blocks, flash-writing tasks and
 SDK-managed networking/ping-session allocations keep their SDK placement.
 Local probe resource exhaustion is logged as
 inconclusive and retried on a later scheduled cycle, not recorded as host failure.
-See [memory placement](docs/monitoring-parity.md#memory-placement-and-inconclusive-probes).
+See [memory placement](monitoring-parity.md#memory-placement-and-inconclusive-probes).
 
 Set root-level `"MaxTaskQueueSize": 4` in the selected appsettings JSON to limit
 simultaneous probes, using the same setting name as .NET. It does not size the
@@ -89,17 +89,17 @@ four of each type. HTTP/TCP resolution shares it too. Timed-out operations keep
 their slots until actual completion; waiting uses the probe's existing timeout
 and slot exhaustion is inconclusive, not host-down. Both settings take effect
 at startup; re-registration preserves them and factory reset restores 4 each.
-See [the detailed limits](docs/monitoring-parity.md#storage-and-bounded-delivery).
+See [the detailed limits](monitoring-parity.md#storage-and-bounded-delivery).
 
 Outbound monitoring, ready and firmware-status messages share `message_publish.*`.
 Monitoring data packs multiple hosts into one Brotli quality-zero MQTT message
 when it fits, splitting at a 128 KiB encoded-wire limit. Incoming commands
 retain a separate 384 KiB wire limit (256 KiB signed payload); enrollment
 commands remain capped at 64 KiB. A completed isolated 50-host emulator cycle reached
-Data as one message. See [monitoring parity](docs/monitoring-parity.md) for the
+Data as one message. See [monitoring parity](monitoring-parity.md) for the
 size-split tests and the synthetic-host caveat.
 The firmware builds the existing Brotli encoder for quality zero only; see
-[the build profile and compatibility tests](docs/brotli-quality-zero.md).
+[the build profile and compatibility tests](brotli-quality-zero.md).
 That module owns event envelopes, Brotli/base64 encoding, message-size checks
 and temporary publication buffers. Named encoding modes distinguish plain JSON,
 compressed strings and compressed `(payload, AppID)` tuples. State reconciliation
@@ -144,7 +144,7 @@ Rebuild firmware after relocating the project; old CMake caches contain absolute
 5. For hardware, use `tools/device.sh flash --port … --config …`.
 6. Verify the signed app and stage application-only OTA releases with `tools/stage_firmware.py` into the chosen dev/live firmware directory.
 
-All command examples and prerequisites are in the [ESP32 guide](docs/guide.md).
+All command examples and prerequisites are in the [ESP32 guide](guide.md).
 The same signed application serves dev and live; private configuration selects the
 backend. Build, flash and provisioning use the local EIM-managed ESP-IDF
 environment; the emulator is a host process.
@@ -164,7 +164,7 @@ into source control.
 The standard firmware supports `icmp`, `dns`, `rawconnect`, `http`, `httphtml`,
 `https`, `blebroadcast`, and `blebroadcastlisten`. Both BLE endpoints share one
 passive NimBLE scanner; they do not create a scanner per monitor. See the
-[BLE support notes](docs/guide.md#ble-broadcast-monitoring) for packet filtering,
+[BLE support notes](guide.md#ble-broadcast-monitoring) for packet filtering,
 supported options, and the bounded listen-output adaptation. BLE command
 processors remain unsupported.
 Dev/live appsettings templates list unsupported endpoints in

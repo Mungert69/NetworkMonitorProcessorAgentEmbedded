@@ -6,7 +6,8 @@ behaviour and backend contracts—not a second, simplified monitoring protocol.
 
 ## Before editing
 
-1. Read [README.md](README.md) for the layout and build entry points.
+1. Read [the developer reference](docs/developer-reference.md) for the layout,
+   build entry points and test commands.
 2. Read [monitoring parity](docs/monitoring-parity.md) before changing monitoring,
    scheduling, serialization or acknowledgements.
 3. Read the relevant module header, implementation and tests. Inspect callers

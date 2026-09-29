@@ -541,4 +541,4 @@ Create the Wi-Fi password file outside the repository with mode `600`; it should
 This is a **development** setup: app updates are signed, but hardware Secure Boot and flash encryption are not enabled; the token and AuthKey in `nmconfig` are readable from raw flash. Use test credentials on these boards until a hardware security and recovery process is validated. Do not run `device.sh flash` on a deployed board to perform an update; it is first-provisioning only. Normal updates use signed HTTPS OTA and preserve both `nmconfig` and `nmdata`.
 
 The root CMake project runs host tests against actual native firmware code, not
-a copied Linux processor. See [the test instructions](../README.md#tests).
+a copied Linux processor. See [the test instructions](developer-reference.md#tests).

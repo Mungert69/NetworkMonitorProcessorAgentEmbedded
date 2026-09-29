@@ -165,7 +165,7 @@ Boot and flash encryption are not enabled by this development profile.
 
 ## Verification
 
-Use the tests in [README.md](../README.md#tests) and
+Use the tests in [the developer reference](developer-reference.md#tests) and
 [monitoring parity](monitoring-parity.md). Cross-language signature tests require
 the sibling .NET source checkouts and host dependencies documented in the guide;
 this document replaces external documentation dependencies, not those test inputs.
