@@ -13,13 +13,13 @@ The board also needs a USB data connection and a 2.4 GHz Wi-Fi network.
 
 ## First-time setup
 
-The firmware is in preview. Initial installation uses a prebuilt, signed
-factory image over USB. The image is signed by the project maintainer; users do
-not need the signing key. The first-install package will be published with the
-firmware on the [GitHub releases page](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases).
-Do not use an image intended for a different ESP32 board.
+The firmware is in preview, and there is currently no public first-install
+image. New boards cannot yet be set up through this repository's releases.
+When a signed factory image is published, it can be flashed over USB without
+giving users the signing key. Do not use an image intended for a different
+ESP32 board.
 
-After the initial image is installed, connect to its USB serial console at
+When a first-install image is available, connect to its USB serial console at
 115200 baud and watch its startup logs. The device asks for the Wi-Fi SSID and
 password without echoing the password. After it connects, the logs display an
 OAuth sign-in URL and user code. Open the URL in a browser, enter the code,
