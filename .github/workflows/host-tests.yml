@@ -1,0 +1,50 @@
+name: Host tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install native test dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake libbrotli-dev libssl-dev
+      - name: Configure
+        run: cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build-tests -j 2
+      - name: Test
+        run: ctest --test-dir build-tests --output-on-failure
+      - name: Tooling tests
+        run: python3 -m unittest discover -s tests/tooling
+  firmware-and-brotli:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install pinned ESP-IDF toolchain
+        uses: espressif/install-esp-idf-action@8fc05d1470d5591417e7a3707a1f2bec178db4ae # v1 branch commit
+        with:
+          version: v6.1
+      - name: Build with disposable CI-only signing key
+        working-directory: firmware
+        run: |
+          umask 077
+          espsecure.py generate_signing_key --version 2 private-ota-signing-key.pem
+          idf.py -D SDKCONFIG=sdkconfig.production build
+          test -s build/networkmonitor_processor_esp32.bin
+      - name: Run specialized Brotli tests
+        run: |
+          cmake -S . -B build-q0-tests -DNM_TEST_BROTLI_Q0=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-Os -fsanitize=address,undefined -fno-omit-frame-pointer'
+          cmake --build build-q0-tests -j 2
+          ctest --test-dir build-q0-tests --output-on-failure

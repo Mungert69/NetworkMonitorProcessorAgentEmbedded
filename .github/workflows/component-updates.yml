@@ -1,0 +1,37 @@
+name: ESP component update check
+
+on:
+  schedule:
+    - cron: '17 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Check pinned components against registry
+        id: check
+        continue-on-error: true
+        run: python3 tools/check-component-updates.py
+      - name: Open or update tracking issue when review is needed
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title='Review firmware dependency updates'
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "$title in:title" --json number --jq 'length')
+          if [ "$existing" -eq 0 ]; then
+            gh issue create --title "$title" \
+              --body 'The scheduled check found a newer library release or could not reach an upstream registry. Run `python3 tools/check-component-updates.py`. Update the exact pins in a pull request, regenerate the IDF lockfile if applicable, and require CI to pass before merging.' \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+          exit 1
