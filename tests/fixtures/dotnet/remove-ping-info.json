@@ -1,0 +1,38 @@
+[
+  {
+    "ID": 0,
+    "MonitorPingInfoID": -2147483648
+  },
+  {
+    "ID": 1,
+    "MonitorPingInfoID": 2147483647
+  },
+  {
+    "ID": 2147483647,
+    "MonitorPingInfoID": -2147483648
+  },
+  {
+    "ID": 2147483648,
+    "MonitorPingInfoID": 2147483647
+  },
+  {
+    "ID": 2147483649,
+    "MonitorPingInfoID": -2147483648
+  },
+  {
+    "ID": 4294967295,
+    "MonitorPingInfoID": 2147483647
+  },
+  {
+    "ID": 9007199254740992,
+    "MonitorPingInfoID": -2147483648
+  },
+  {
+    "ID": 9007199254740993,
+    "MonitorPingInfoID": 2147483647
+  },
+  {
+    "ID": 18446744073709551615,
+    "MonitorPingInfoID": -2147483648
+  }
+]

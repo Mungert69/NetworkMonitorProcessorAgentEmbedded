@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NetworkMonitorLibRoot Condition="'$(NetworkMonitorLibRoot)' == ''">$(MSBuildThisFileDirectory)../../../../NetworkMonitorLib</NetworkMonitorLibRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(NetworkMonitorLibRoot)/Objects/PingInfo.cs" Link="Models/PingInfo.cs" />
+    <Compile Include="$(NetworkMonitorLibRoot)/Objects/RemovePingInfo.cs" Link="Models/RemovePingInfo.cs" />
+    <Compile Include="$(NetworkMonitorLibRoot)/Objects/SwapMonitorPingInfo.cs" Link="Models/SwapMonitorPingInfo.cs" />
+    <Compile Include="$(NetworkMonitorLibRoot)/Objects/PingParams.cs" Link="Models/PingParams.cs" />
+    <Compile Include="$(NetworkMonitorLibRoot)/Objects/AlertFlagObj.cs" Link="Models/AlertFlagObj.cs" />
+    <Compile Include="$(NetworkMonitorLibRoot)/Objects/ReadyState.cs" Link="Models/ReadyState.cs" />
+  </ItemGroup>
+</Project>

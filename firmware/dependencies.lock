@@ -1,0 +1,31 @@
+dependencies:
+  espressif/brotli:
+    component_hash: 2604df17fcbe2c4e11fb73b3595a13c2dff6af111ab5102e8d9d09bf91653c23
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.1'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.2.0
+  espressif/mqtt:
+    component_hash: fb18bc3b65aa8c94693a9811ffc322cca8a65d92d5ec84983d3e385080e3969c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.1.0
+  idf:
+    source:
+      type: idf
+    version: 6.1.0
+direct_dependencies:
+- espressif/brotli
+- espressif/mqtt
+manifest_hash: d1841cc3255be9700ddba9318c765bafdbecf6884540cf2991473c440b4b1d68
+target: esp32s3
+version: 3.0.0

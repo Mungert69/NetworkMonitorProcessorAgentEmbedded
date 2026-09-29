@@ -1,0 +1,92 @@
+[
+  {
+    "ID": 0,
+    "DateSent": "2022-01-01T00:00:00Z",
+    "Status": null,
+    "StatusID": 0,
+    "RoundTripTime": null,
+    "RoundTripTimeInt": -2147483648,
+    "MonitorPingInfoID": -2147483648,
+    "DateSentInt": 0
+  },
+  {
+    "ID": 1,
+    "DateSent": "2022-01-01T00:00:01Z",
+    "Status": "ok \u0022quoted\u0022 \\ slash\n\t\u003C\u003E\u0026 caf\u00E9 \uD83D\uDE00",
+    "StatusID": 65535,
+    "RoundTripTime": 0,
+    "RoundTripTimeInt": 2147483647,
+    "MonitorPingInfoID": 2147483647,
+    "DateSentInt": 1
+  },
+  {
+    "ID": 2147483647,
+    "DateSent": "2090-01-19T03:14:07Z",
+    "Status": null,
+    "StatusID": 0,
+    "RoundTripTime": 1,
+    "RoundTripTimeInt": -2147483648,
+    "MonitorPingInfoID": -2147483648,
+    "DateSentInt": 2147483647
+  },
+  {
+    "ID": 2147483648,
+    "DateSent": "2090-01-19T03:14:08Z",
+    "Status": "ok \u0022quoted\u0022 \\ slash\n\t\u003C\u003E\u0026 caf\u00E9 \uD83D\uDE00",
+    "StatusID": 65535,
+    "RoundTripTime": 65534,
+    "RoundTripTimeInt": 2147483647,
+    "MonitorPingInfoID": 2147483647,
+    "DateSentInt": 2147483648
+  },
+  {
+    "ID": 2147483649,
+    "DateSent": "2090-01-19T03:14:09Z",
+    "Status": null,
+    "StatusID": 0,
+    "RoundTripTime": 65535,
+    "RoundTripTimeInt": -2147483648,
+    "MonitorPingInfoID": -2147483648,
+    "DateSentInt": 2147483649
+  },
+  {
+    "ID": 4294967295,
+    "DateSent": "2158-02-07T06:28:15Z",
+    "Status": "ok \u0022quoted\u0022 \\ slash\n\t\u003C\u003E\u0026 caf\u00E9 \uD83D\uDE00",
+    "StatusID": 65535,
+    "RoundTripTime": null,
+    "RoundTripTimeInt": 2147483647,
+    "MonitorPingInfoID": 2147483647,
+    "DateSentInt": 4294967295
+  },
+  {
+    "ID": 9007199254740992,
+    "DateSent": "2022-01-01T00:00:00Z",
+    "Status": null,
+    "StatusID": 0,
+    "RoundTripTime": 0,
+    "RoundTripTimeInt": -2147483648,
+    "MonitorPingInfoID": -2147483648,
+    "DateSentInt": 0
+  },
+  {
+    "ID": 9007199254740993,
+    "DateSent": "2022-01-01T00:00:01Z",
+    "Status": "ok \u0022quoted\u0022 \\ slash\n\t\u003C\u003E\u0026 caf\u00E9 \uD83D\uDE00",
+    "StatusID": 65535,
+    "RoundTripTime": 1,
+    "RoundTripTimeInt": 2147483647,
+    "MonitorPingInfoID": 2147483647,
+    "DateSentInt": 1
+  },
+  {
+    "ID": 18446744073709551615,
+    "DateSent": "2090-01-19T03:14:07Z",
+    "Status": null,
+    "StatusID": 0,
+    "RoundTripTime": 65534,
+    "RoundTripTimeInt": -2147483648,
+    "MonitorPingInfoID": -2147483648,
+    "DateSentInt": 2147483647
+  }
+]

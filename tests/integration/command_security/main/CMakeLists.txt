@@ -1,0 +1,28 @@
+idf_component_register(SRCS "main.c" "../../../../firmware/main/command_security.c"
+    "../../../../third_party/yyjson/src/yyjson.c"
+    INCLUDE_DIRS "${CMAKE_CURRENT_BINARY_DIR}" "../../../../firmware/main"
+    "../../../../third_party/yyjson/src" REQUIRES mbedtls esp_psram)
+if(CMAKE_BUILD_EARLY_EXPANSION)
+    return()
+endif()
+if(NOT NM_SIGNATURE_FIXTURES)
+    message(FATAL_ERROR "NM_SIGNATURE_FIXTURES is required")
+endif()
+file(GLOB fixture_files "${NM_SIGNATURE_FIXTURES}/*.json" "${NM_SIGNATURE_FIXTURES}/*.txt" "${NM_SIGNATURE_FIXTURES}/*.pem")
+set(header "#include <stddef.h>\n")
+set(entries "")
+set(index 0)
+foreach(path IN LISTS fixture_files)
+    get_filename_component(name "${path}" NAME)
+    file(READ "${path}" bytes HEX)
+    file(SIZE "${path}" length)
+    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," bytes "${bytes}")
+    string(APPEND header "static const unsigned char fixture_${index}[] = {${bytes}};\n")
+    string(APPEND entries "{\"${name}\", fixture_${index}, ${length}},\n")
+    math(EXPR index "${index}+1")
+endforeach()
+string(APPEND header "static const struct {const char *name; const unsigned char *bytes; size_t length;} fixtures[] = {${entries}};\n")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/fixtures.h" "${header}")
+target_compile_options(${COMPONENT_LIB} PRIVATE -UNDEBUG)
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+    YYJSON_DISABLE_UTILS=1 YYJSON_DISABLE_INCR_READER=1 YYJSON_DISABLE_NON_STANDARD=1)

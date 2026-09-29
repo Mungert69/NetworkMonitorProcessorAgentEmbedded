@@ -1,0 +1,1305 @@
+[
+  {
+    "Name": "ping-id-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:0}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-0",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:0}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:1}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 1,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-1",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:1}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 1,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-2147483647",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:2147483647}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 2147483647,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-2147483647",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:2147483647}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 2147483647,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-2147483648",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:2147483648}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 2147483648,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-2147483648",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:2147483648}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 2147483648,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-2147483649",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:2147483649}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 2147483649,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-2147483649",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:2147483649}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 2147483649,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-4294967295",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:4294967295}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 4294967295,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-4294967295",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:4294967295}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 4294967295,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-9007199254740992",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:9007199254740992}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 9007199254740992,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-9007199254740992",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:9007199254740992}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 9007199254740992,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-9007199254740993",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:9007199254740993}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 9007199254740993,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-9007199254740993",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:9007199254740993}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 9007199254740993,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-id-18446744073709551615",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:18446744073709551615}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 18446744073709551615,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-id-18446744073709551615",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:18446744073709551615}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 18446744073709551615,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "date-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:0}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "date-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:1}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:01Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 1
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "date-2147483647",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:2147483647}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2090-01-19T03:14:07Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 2147483647
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "date-2147483648",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:2147483648}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2090-01-19T03:14:08Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 2147483648
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "date-2147483649",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:2147483649}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2090-01-19T03:14:09Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 2147483649
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "date-4294967295",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:4294967295}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2158-02-07T06:28:15Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 4294967295
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "round-trip-time-null",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:null}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "round-trip-time-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:0}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": 0,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "round-trip-time-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:1}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": 1,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "round-trip-time-65534",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:65534}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": 65534,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "round-trip-time-65535",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:65535}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": 65535,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-ID-invalid-type-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:\u00221\u0022}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-ID-invalid-type-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:true}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-ID-invalid-type-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:{}}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-ID-invalid-type-3",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:[]}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-ID-invalid-type-4",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:1.0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-ID-invalid-type-5",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:1e0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-DateSentInt-invalid-type-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:\u00221\u0022}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-DateSentInt-invalid-type-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:true}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-DateSentInt-invalid-type-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:{}}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-DateSentInt-invalid-type-3",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:[]}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-DateSentInt-invalid-type-4",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:1.0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-DateSentInt-invalid-type-5",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:1e0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-StatusID-invalid-type-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:\u00221\u0022}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-StatusID-invalid-type-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:true}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-StatusID-invalid-type-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:{}}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-StatusID-invalid-type-3",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:[]}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-StatusID-invalid-type-4",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:1.0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-StatusID-invalid-type-5",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:1e0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-RoundTripTime-invalid-type-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:\u00221\u0022}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-RoundTripTime-invalid-type-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:true}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-RoundTripTime-invalid-type-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:{}}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-RoundTripTime-invalid-type-3",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:[]}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-RoundTripTime-invalid-type-4",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:1.0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-RoundTripTime-invalid-type-5",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:1e0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-invalid-type-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:\u00221\u0022}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-invalid-type-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:true}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-invalid-type-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:{}}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-invalid-type-3",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:[]}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-invalid-type-4",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:1.0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-invalid-type-5",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:1e0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-ID-out-of-range-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:-1}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-ID-out-of-range-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:18446744073709551616}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-ID-out-of-range-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:null}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "ping-DateSentInt-out-of-range-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:-1}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-DateSentInt-out-of-range-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:4294967296}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-DateSentInt-out-of-range-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:null}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.DateSentInt"
+  },
+  {
+    "Name": "ping-StatusID-out-of-range-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:-1}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-StatusID-out-of-range-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:65536}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-StatusID-out-of-range-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022StatusID\u0022:null}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.StatusID"
+  },
+  {
+    "Name": "ping-RoundTripTime-out-of-range-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:-1}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-RoundTripTime-out-of-range-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022RoundTripTime\u0022:65536}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.RoundTripTime"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-out-of-range-0",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:-2147483649}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-out-of-range-1",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:2147483648}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "ping-MonitorPingInfoID-out-of-range-2",
+    "Model": "PingInfo",
+    "Input": "{\u0022MonitorPingInfoID\u0022:null}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.MonitorPingInfoID"
+  },
+  {
+    "Name": "remove-invalid-id-0",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:\u00221\u0022}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-1",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:true}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-2",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:{}}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-3",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:[]}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-4",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:1.0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-5",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:1e0}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-6",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:-1}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-7",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:18446744073709551616}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "remove-invalid-id-8",
+    "Model": "RemovePingInfo",
+    "Input": "{\u0022ID\u0022:null}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-id-overflow-2147483648",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:2147483648}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-id-overflow-2147483649",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:2147483649}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-id-overflow-4294967295",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:4294967295}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-id-overflow-9007199254740992",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:9007199254740992}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-id-overflow-9007199254740993",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:9007199254740993}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-id-overflow-18446744073709551615",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:18446744073709551615}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-id-overflow--2147483649",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:-2147483649}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "swap-min",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:-2147483648}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": -2147483648,
+      "AppID": ""
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "swap-max",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022ID\u0022:2147483647}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 2147483647,
+      "AppID": ""
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "swap-numeric-app-id",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022AppID\u0022:123}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.AppID"
+  },
+  {
+    "Name": "swap-null-app-id",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{\u0022AppID\u0022:null}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "AppID": null
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-defaults",
+    "Model": "PingInfo",
+    "Input": "{}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "remove-defaults",
+    "Model": "RemovePingInfo",
+    "Input": "{}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "MonitorPingInfoID": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "swap-defaults",
+    "Model": "SwapMonitorPingInfo",
+    "Input": "{}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "AppID": ""
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-null-root",
+    "Model": "PingInfo",
+    "Input": "null",
+    "Accepted": true,
+    "Normalized": null,
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-array-root",
+    "Model": "PingInfo",
+    "Input": "[]",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$"
+  },
+  {
+    "Name": "ping-number-root",
+    "Model": "PingInfo",
+    "Input": "1",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$"
+  },
+  {
+    "Name": "ping-numeric-status",
+    "Model": "PingInfo",
+    "Input": "{\u0022Status\u0022:1}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.Status"
+  },
+  {
+    "Name": "ping-trailing-comma",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:1,}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$"
+  },
+  {
+    "Name": "ping-comment",
+    "Model": "PingInfo",
+    "Input": "{/*comment*/\u0022ID\u0022:1}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$"
+  },
+  {
+    "Name": "ping-wrong-case",
+    "Model": "PingInfo",
+    "Input": "{\u0022id\u0022:42}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-unknown-property",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:1,\u0022Unknown\u0022:42}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 1,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-duplicate-id",
+    "Model": "PingInfo",
+    "Input": "{\u0022ID\u0022:1,\u0022ID\u0022:9007199254740993}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 9007199254740993,
+      "DateSent": "2022-01-01T00:00:00Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-date-int-last",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSent\u0022:\u00222022-01-01T00:00:01Z\u0022,\u0022DateSentInt\u0022:2}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:02Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 2
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "ping-date-last",
+    "Model": "PingInfo",
+    "Input": "{\u0022DateSentInt\u0022:2,\u0022DateSent\u0022:\u00222022-01-01T00:00:01Z\u0022}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "DateSent": "2022-01-01T00:00:01Z",
+      "Status": null,
+      "StatusID": 0,
+      "RoundTripTime": null,
+      "RoundTripTimeInt": 0,
+      "MonitorPingInfoID": 0,
+      "DateSentInt": 1
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "params-defaults",
+    "Model": "PingParams",
+    "Input": "{}",
+    "Accepted": true,
+    "Normalized": {
+      "Timeout": 0,
+      "AlertThreshold": 0,
+      "HostLimit": 0
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "params-timeout-overflow",
+    "Model": "PingParams",
+    "Input": "{\u0022Timeout\u0022:2147483648}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.Timeout"
+  },
+  {
+    "Name": "alert-defaults",
+    "Model": "AlertFlagObj",
+    "Input": "{}",
+    "Accepted": true,
+    "Normalized": {
+      "ID": 0,
+      "AppID": ""
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "alert-id-overflow",
+    "Model": "AlertFlagObj",
+    "Input": "{\u0022ID\u0022:2147483648}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.ID"
+  },
+  {
+    "Name": "readiness-defaults",
+    "Model": "ReadinessState",
+    "Input": "{}",
+    "Accepted": true,
+    "Normalized": {
+      "IsReady": false,
+      "Reason": null
+    },
+    "Exception": null,
+    "ExceptionPath": null
+  },
+  {
+    "Name": "readiness-string-bool",
+    "Model": "ReadinessState",
+    "Input": "{\u0022IsReady\u0022:\u0022true\u0022}",
+    "Accepted": false,
+    "Normalized": null,
+    "Exception": "JsonException",
+    "ExceptionPath": "$.IsReady"
+  }
+]

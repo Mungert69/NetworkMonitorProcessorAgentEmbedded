@@ -1,0 +1,13 @@
+# Add to the existing rabbitmq.conf; keep other broker settings unchanged.
+# For local Linux testing only. Do not expose plaintext MQTT to the internet.
+mqtt.listeners.tcp.1 = 127.0.0.1:1883
+mqtt.allow_anonymous = false
+mqtt.vhost = /vhostuser
+mqtt.exchange = monitorProcessor.mqtt.v1
+
+# For remote hardware use a TLS listener and server certificate instead:
+# mqtt.listeners.tcp = none
+# mqtt.listeners.ssl.default = 8883
+# ssl_options.cacertfile = /path/to/ca.pem
+# ssl_options.certfile = /path/to/server.pem
+# ssl_options.keyfile = /path/to/server-key.pem

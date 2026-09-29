@@ -1,0 +1,10 @@
+[
+  {
+    "IsReady": false,
+    "Reason": null
+  },
+  {
+    "IsReady": true,
+    "Reason": "ready\n\u0022yes\u0022"
+  }
+]

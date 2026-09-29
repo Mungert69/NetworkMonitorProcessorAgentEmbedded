@@ -1,0 +1,59 @@
+{
+  "SchemaVersion": 1,
+  "Generator": "tests/dotnet/JsonParity",
+  "TargetFramework": "net10.0",
+  "RuntimeVersion": "10.0.12",
+  "Serializer": "System.Text.Json",
+  "SerializerAssemblyVersion": "10.0.0.0",
+  "Profile": {
+    "PropertyNamingPolicy": "none (PascalCase CLR property names)",
+    "PropertyNameCaseInsensitive": false,
+    "NumberHandling": "Strict",
+    "DefaultIgnoreCondition": "Never",
+    "UnmappedMemberHandling": "Skip",
+    "RespectNullableAnnotations": false,
+    "AllowTrailingCommas": false,
+    "ReadCommentHandling": "Disallow",
+    "Encoder": "default",
+    "WriteIndented": true
+  },
+  "SourceRepository": "NetworkMonitorLib (sibling checkout)",
+  "SourceCommit": "3a78edf39c556966ce831518edf698ba2e9f86a1",
+  "SourceWorkingTreeStatus": "",
+  "Sources": [
+    {
+      "Path": "Objects/PingInfo.cs",
+      "Sha256": "33aaf0eb05a321cbd93f62cfb58c775102374729b355828085cd20ff704576e4"
+    },
+    {
+      "Path": "Objects/RemovePingInfo.cs",
+      "Sha256": "22bf7ca6ea68cdea75158fd35541e98b735d8791cf0e2b886dab0f6d59d50c7f"
+    },
+    {
+      "Path": "Objects/SwapMonitorPingInfo.cs",
+      "Sha256": "ca16ee21bbd95ac9a8959f7ffa588637f9add1097472bef3fd47ac729655b068"
+    },
+    {
+      "Path": "Objects/PingParams.cs",
+      "Sha256": "ae5c87bb76ac964be15beb8e8c58a78853c38231895e568892a96141d6c83e16"
+    },
+    {
+      "Path": "Objects/AlertFlagObj.cs",
+      "Sha256": "52838a0cbe2ac6fa79da24a860db0cbaf397e217590d2175f8601f0b0a0d3e39"
+    },
+    {
+      "Path": "Objects/ReadyState.cs",
+      "Sha256": "3a18b20acc4ac81dd853555eb70cd041f195c2a6be2c484edbd53d77d9c540c4"
+    }
+  ],
+  "Files": [
+    "ping-info.json",
+    "remove-ping-info.json",
+    "swap-monitor-ping-info.json",
+    "ping-params.json",
+    "alert-flag-obj.json",
+    "readiness-state.json",
+    "deserialization-cases.json"
+  ],
+  "DeserializationCaseCount": 113
+}

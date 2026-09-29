@@ -1,0 +1,23 @@
+{
+  "exchanges": [
+    {
+      "name": "monitorProcessor.mqtt.v1",
+      "vhost": "/vhostuser",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "monitorProcessor.commands.v2",
+      "vhost": "/vhostuser",
+      "destination": "monitorProcessor.mqtt.v1",
+      "destination_type": "exchange",
+      "routing_key": "#",
+      "arguments": {}
+    }
+  ]
+}

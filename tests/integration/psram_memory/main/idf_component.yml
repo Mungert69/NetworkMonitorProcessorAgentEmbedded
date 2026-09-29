@@ -1,0 +1,3 @@
+dependencies:
+  espressif/brotli: "1.2.0"
+  espressif/mqtt: "1.1.0"
