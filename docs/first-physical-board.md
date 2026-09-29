@@ -1,125 +1,96 @@
-# First ESP32-S3 board: dev setup
+# First ESP32-S3 board: Live setup
 
-This procedure is for a **new ESP32-S3 with 16 MB flash and 8 MB PSRAM**. Run
-the commands from this repository's root on a Linux host with local ESP-IDF 6.1
-through EIM, `jq`, a
-USB data cable, and access to the serial port. It uses the dev backend. For a
-live board, choose `firmware/config/appsettings-live.json` and keep its private
-configuration in a separate directory.
+This is the end-user procedure for a **new ESP32-S3 with 16 MB flash and 8 MB
+octal PSRAM**, such as the ESP32-S3-DevKitC-1-N16R8. It uses the Live backend.
+No ESP-IDF installation, signing key, .NET processor, copied token, or manual
+appsettings editing is required.
 
-## 1. Identify and inspect the board
+## 1. Download the factory image
 
-Connect the board's USB-to-UART port. Either `/dev/ttyACM*` or `/dev/ttyUSB*`
-may appear, depending on the bridge. Use the stable by-id path:
-
-```sh
-ls -l /dev/serial/by-id/
-BOARD_PORT=/dev/serial/by-id/YOUR-BOARD
-```
-
-Restore the existing OTA signing key at
-`../securefiles/private-ota-signing-key.pem` with mode `600`, then build and
-inspect:
+Download `networkmonitor-esp32-s3-live-factory.zip` from the
+[latest GitHub release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest).
+Extract it. The archive contains one versioned factory `.bin` and
+`SHA256SUMS.txt`. Verify the image before flashing:
 
 ```sh
-./tools/build-firmware.sh
-./tools/device.sh inspect --port "$BOARD_PORT"
+sha256sum -c SHA256SUMS.txt
 ```
 
-The inspection reads the chip, MAC, flash size, and development security
-eFuses. It requires an ESP32-S3 with 16 MB flash. PSRAM is checked by the
-firmware on boot; the serial preflight cannot confirm its size. Neither of
-these commands writes to the device. Keep the MAC shown by `inspect` for the
-flash confirmation prompt.
+On Windows, use `Get-FileHash -Algorithm SHA256 <image-file>` and compare its
+output with the matching line in `SHA256SUMS.txt`.
 
-## 2. Prepare private configuration
+## 2. Install the serial flashing tool
 
-Use a 2.4 GHz Wi-Fi network. Create the password file in a private directory
-with a text editor; do not put the password on a shell command line. The file
-must contain the password, optionally followed by one newline.
+Install Python 3, create a virtual environment, and install Espressif's
+`esptool` in it. This is the small flashing utility, not the ESP-IDF firmware
+development toolchain:
 
 ```sh
-install -d -m 700 runtime/my-new-board
-${EDITOR:-vi} runtime/my-new-board/wifi-password.txt
-chmod 600 runtime/my-new-board/wifi-password.txt
-python3 tools/prepare_config.py \
-  --config firmware/config/appsettings-dev.json \
-  --wifi-ssid YOUR_2_4_GHZ_SSID \
-  --wifi-password-file runtime/my-new-board/wifi-password.txt \
-  --output runtime/my-new-board/config.json
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install esptool
 ```
 
-The generated config uses in-app OAuth device authorization. `runtime/` is
-ignored by Git; keep both private files backed up securely. No .NET processor
-or copied token is needed for this setup. The device derives its processor
-identity from its own Wi-Fi MAC during enrollment.
+On Windows PowerShell, use `py -m venv .venv`, then
+`.venv\Scripts\Activate.ps1`; install with `python -m pip install esptool`.
+On Linux, the account must have access to the serial device (often by joining
+the `dialout` group and signing in again).
 
-## 3. Flash once and watch first boot
+## 3. Erase and flash the new board
+
+Connect the board using a USB data cable. Find its port: `/dev/ttyACM0` or
+`/dev/ttyUSB0` on Linux, `/dev/cu.*` on macOS, or `COM3` (for example) on
+Windows. For a new board that is not entering download mode automatically,
+hold **BOOT**, tap **RESET/EN**, then release **BOOT**.
+
+The following commands erase the entire flash, then write the single factory
+image at address `0x0`. **This permanently removes any existing firmware,
+Wi-Fi settings, credentials and saved processor state. Use only for a new
+board. Never use this procedure to update an enrolled processor.** It does not
+burn eFuses.
 
 ```sh
-./tools/device.sh flash --port "$BOARD_PORT" \
-  --config runtime/my-new-board/config.json
-./tools/device.sh monitor --port "$BOARD_PORT"
+python -m esptool --chip esp32s3 --port YOUR_PORT erase-flash
+python -m esptool --chip esp32s3 --port YOUR_PORT write-flash 0x0 networkmonitor-esp32-s3-live-factory-VERSION.bin
 ```
 
-The flash command repeats the chip/eFuse checks and reads the full 2 MiB
-`nmdata` state partition. It refuses nonblank processor state, then asks you
-to type the board's MAC before writing. It flashes the bootloader, partition
-table, OTA selector, private config, and signed application. It does not erase
-the processor state partition or burn eFuses. If automatic download mode fails,
-hold BOOT, tap RESET/EN, and retry.
+Replace `YOUR_PORT` and `VERSION` with the actual port and image version. For
+example, Linux users may use `/dev/ttyACM0`. Keep the flash mode options at
+their defaults; the image includes the tested bootloader configuration.
 
-In the 115200-baud serial monitor, confirm the firmware reports 16 MB flash
-and 8 MB PSRAM, joins Wi-Fi, and prints the OAuth sign-in URL and user code.
-Open that URL on another device, authorize the code, then watch for successful
-registration and `ESP32_S3_MQTT_READY`. After assigning monitors, look for
-accepted host commands, probe results, backend data saves, and
-`removePingInfos` acknowledgements. A broker publish acknowledgement alone
-does not clear pending ping data.
+## 4. Connect Wi-Fi and authorize
 
-If the Wi-Fi details were wrong, the serial setup flow prompts for corrected
-details; see [serial Wi-Fi setup](guide.md#factory-reset-and-usb-wi-fi-setup-017). If OAuth is
-interrupted, reboot and follow the displayed device-flow instructions.
+Open the USB serial console at **115200 baud**. For example, with the same
+Python environment:
 
-### PSRAM verification and early-boot failures
+```sh
+python -m serial.tools.miniterm YOUR_PORT 115200
+```
 
-`Found 8MB PSRAM device` confirms the detected density, but by itself does not
-prove memory is usable. The diagnostic in `tests/hardware/psram_probe/` now
-verifies both the full ESP-IDF boot memory test and a 7 MiB address-dependent
-write/read pattern.
+The device asks for the 2.4 GHz Wi-Fi SSID and password. Type each at its
+prompt; the firmware does not echo the input. After connecting, it prints an
+OAuth sign-in URL and user code. Open the URL in a browser, enter the code,
+and authorize with your Network Monitor account. Watch the serial output for
+successful registration and `ESP32_S3_MQTT_READY`. Keep the serial log private
+while the short-lived code is visible.
 
-Historical hardware check (before the current IDF 6.1 migration): on the
-attached ESP32-S3 rev v0.2 board, ESP-IDF v5.5.5 with QIO flash at 80 MHz and
-octal PSRAM at 40 MHz booted successfully. The serial log identified
-flash as 16 MB MXIC and PSRAM as AP (`vendor 0x0d`, `device 0x02`, 64 Mbit),
-reported `Found 8MB PSRAM device`, passed `SPI SRAM memory test OK`, and
-reported `PSRAM_PROBE_PASS checked_bytes=7340032`. This confirms the board has
-8 MiB of addressable, working PSRAM under this configuration. The probe is
-**not** a processor image or OTA artifact. It was flashed only to the test
-board's `ota_0` app slot at `0x20000`; do not flash it to a working processor.
+## 5. Assign hosts and update later
 
-Earlier DIO-mode trials on the experimental boards ended at `cpu_start:
-Multicore app` with `RTCWDT_RTC_RST`; disabling the boot memory test moved the
-failure to an `IllegalInstruction` before `app_main`. A DIO 20 MHz flash trial
-with octal PSRAM at 40 MHz also failed. The subsequent QIO/80 MHz run passed,
-so the previous blanket conclusion that these boards cannot use PSRAM was too
-strong. The successful trial changed flash mode and frequency together, so it
-does not isolate which change resolved startup. Quad PSRAM mode still fails
-with `quad_psram: PSRAM chip is not connected, or wrong PSRAM line mode`; this
-board requires octal PSRAM mode.
+In the website dashboard, add hosts and assign them to this processor. The
+ESP32-S3 supports ICMP, DNS, TCP, HTTP/HTTPS and passive BLE broadcast
+monitoring; it does not support command processors or every endpoint offered
+by the Windows and Docker agents.
 
-[Espressif issue #18806](https://github.com/espressif/esp-idf/issues/18806)
-describes a similar ESP32-S3 rev v0.2 / AP octal PSRAM startup failure, but the
-successful test above shows that this attached board can pass the full memory
-test and exercise most of its PSRAM. Issue
-[#11567](https://github.com/espressif/esp-idf/issues/11567) concerns a
-different 32 MB PSRAM module with an unknown vendor ID, so it is not evidence
-that this N16R8 board has counterfeit or incorrectly sized memory.
+For later firmware upgrades or downgrades, use **Profile → Device firmware**
+on the website. OTA preserves the device's Wi-Fi and account configuration.
+Do not repeat the erase-and-flash procedure for updates.
 
-## Subsequent updates
+If Wi-Fi setup or OAuth is interrupted, restart the board and follow the
+serial prompts again. The device resumes from its saved setup stage.
 
-Use signed HTTPS OTA for later application updates. OTA keeps the private
-config and monitor state. Do not run the initial flash command on an enrolled
-board or copy an enrolled flash image to another board. This development
-profile does not enable Secure Boot or flash encryption; use test credentials
-until the hardware security process is in place.
+## Security note
+
+Firmware application images are signed and verified by the device. Hardware
+Secure Boot and flash encryption are not enabled in this preview, so physical
+access to a board can expose saved credentials. Protect the device and use
+the normal OTA update route after first installation.

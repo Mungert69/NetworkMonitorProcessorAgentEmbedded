@@ -514,31 +514,12 @@ synthetic local authority (no real account is reset).
 
 ### Initial flashing
 
-For a concise first-board checklist, see [first physical board](first-physical-board.md).
-
-This workflow is for a **new ESP32-S3 with 16 MB flash and 8 MB PSRAM**. It has not yet been executed on hardware. Use a data-capable USB cable and find the stable serial path with `ls -l /dev/serial/by-id/`. Boards with native USB normally appear as `/dev/ttyACM*`; USB-to-UART bridges normally appear as `/dev/ttyUSB*`. If automatic reset fails, hold BOOT, tap RESET/EN, and retry. See the [ESP-IDF ESP32-S3 flashing guide](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/get-started/index.html).
-
-Build once, then prepare a private Wi-Fi/OAuth configuration. Each board derives its identity from its own MAC address and enrolls after browser login; no .NET authentication or credential copying is required. The firmware application is common to all boards. Do not clone an already enrolled flash image onto another board, because it contains that processor's identity and credentials.
-
-```sh
-# Restore the existing OTA signing key first; see prerequisites above.
-./tools/build-firmware.sh
-umask 077
-mkdir -p runtime/board1-config
-python3 tools/prepare_config.py \
-  --config firmware/config/appsettings-dev.json \
-  --wifi-ssid YOUR_2_4_GHZ_SSID \
-  --wifi-password-file /path/to/private/board-wifi-password.txt \
-  --output "$PWD/runtime/board1-config/config.json"
-./tools/device.sh inspect --port /dev/serial/by-id/YOUR-BOARD
-./tools/device.sh flash --port /dev/serial/by-id/YOUR-BOARD \
-  --config runtime/board1-config/config.json
-./tools/device.sh monitor --port /dev/serial/by-id/YOUR-BOARD
-```
-
-Create the Wi-Fi password file outside the repository with mode `600`; it should contain the password and optionally one trailing newline. The SSID must be a 2.4 GHz network because ESP32-S3 does not support 5 GHz Wi-Fi. Omitting both Wi-Fi options keeps the emulator defaults, which `device.sh flash` refuses. The read-only inspection verifies the ESP32-S3, 16 MB flash, and security eFuses. First-flash mode also reads the full `nmdata` partition and refuses a board with existing processor state. It then requires typing the board's MAC address, erases only the default 24 KiB Wi-Fi NVS partition, and flashes bootloader, partition table, OTA selector, device config and `ota_0`. It does **not** erase `nmdata` or burn eFuses. The serial flash utility verifies data it writes. Follow the browser login URL/code in the serial output. Then check for signed enrollment completion, MQTT readiness, probes, and backend `removePingInfos` acknowledgements after adding monitors. The `ESP32_S3_EMULATOR_READY` resource-profile marker (16 MB flash, 8 MB PSRAM) is also emitted on real hardware.
-
-This is a **development** setup: app updates are signed, but hardware Secure Boot and flash encryption are not enabled; the token and AuthKey in `nmconfig` are readable from raw flash. Use test credentials on these boards until a hardware security and recovery process is validated. Do not run `device.sh flash` on a deployed board to perform an update; it is first-provisioning only. Normal updates use signed HTTPS OTA and preserve both `nmconfig` and `nmdata`.
+For end-user first installation, download the Live factory `.bin` from the
+[latest public release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest)
+and follow [First ESP32-S3 board: Live setup](first-physical-board.md). That is
+the supported public procedure; it uses a single prebuilt image and does not
+require ESP-IDF. The developer-only `tools/device.sh` flow below this document
+is for locally built images and must not be substituted for the public guide.
 
 The root CMake project runs host tests against actual native firmware code, not
 a copied Linux processor. See [the test instructions](developer-reference.md#tests).

@@ -13,21 +13,18 @@ The board also needs a USB data connection and a 2.4 GHz Wi-Fi network.
 
 ## First-time setup
 
-The firmware is in preview, and there is currently no public first-install
-image. New boards cannot yet be set up through this repository's releases.
-When a signed factory image is published, it can be flashed over USB without
-giving users the signing key. Do not use an image intended for a different
-ESP32 board.
+Download the **Live factory image** from the
+[latest GitHub release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest).
+The archive contains one `.bin` for first installation, with the signed
+firmware application, Live service settings, and interactive Wi-Fi setup
+already included. The image does not contain a
+Wi-Fi password, account token, or processor identity. Follow the concise
+[first-board setup guide](docs/first-physical-board.md); it covers flashing,
+the serial OAuth sign-in, and assigning hosts. Do not use this factory image
+to update an enrolled board; use **Profile → Device firmware** instead.
 
-When a first-install image is available, connect to its USB serial console at
-115200 baud and watch its startup logs. The device asks for the Wi-Fi SSID and
-password without echoing the password. After it connects, the logs display an
-OAuth sign-in URL and user code. Open the URL in a browser, enter the code,
-and sign in to your Network Monitor account. The device then registers to your
-account. Add hosts from the dashboard and assign them to this processor.
-
-The [download page](https://readyforquantum.com/Download) has current product
-information and support contact details.
+The [website download page](https://readyforquantum.com/Download) also links to
+this image and the same setup procedure.
 
 ## Monitoring support
 
