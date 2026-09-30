@@ -84,8 +84,16 @@ int main(void)
     assert(nm_wifi_input_feed(&input,'\n')==0);
     for (int i=0;i<10000;++i) nm_wifi_input_feed(&input,'x');
     assert(nm_wifi_input_feed(&input,'\n')==-1);
-    assert(nm_wifi_input_feed(&input,'\n')==1);
+    assert(nm_wifi_input_feed(&input,'\n')==0);
     assert(!nm_wifi_input_valid(input.text,false));
+    /* Some console drivers turn CRLF into two LF characters. Neither an
+     * extra terminator nor an empty submission should reject an untyped password. */
+    assert(nm_wifi_input_feed(&input,'\r')==0);
+    assert(nm_wifi_input_feed(&input,'\n')==0);
+    assert(nm_wifi_input_feed(&input,'s')==0);
+    assert(nm_wifi_input_feed(&input,'\n')==1);
+    assert(nm_wifi_input_feed(&input,'\n')==0);
+    assert(nm_wifi_input_feed(&input,'\n')==0);
     assert(nm_wifi_input_feed(&input,'a')==0);
     assert(nm_wifi_input_feed(&input,8)==0);
     assert(nm_wifi_input_feed(&input,'b')==0);

@@ -9,8 +9,8 @@ appsettings editing is required.
 
 Download the versioned factory `.bin` and `SHA256SUMS.txt` from the
 [latest GitHub release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest).
-Keep both files in the same directory. The current v0.2.1 image is named
-`networkmonitor-esp32-s3-live-factory-0.2.1.bin`; use the exact filename shown
+Keep both files in the same directory. The current v0.2.2 image is named
+`networkmonitor-esp32-s3-live-factory-0.2.2.bin`; use the exact filename shown
 on the release page if you download a later version.
 
 Verify the image before flashing. On Linux:
@@ -19,9 +19,9 @@ Verify the image before flashing. On Linux:
 sha256sum -c SHA256SUMS.txt
 ```
 
-On macOS, run `shasum -a 256 networkmonitor-esp32-s3-live-factory-0.2.1.bin`
+On macOS, run `shasum -a 256 networkmonitor-esp32-s3-live-factory-0.2.2.bin`
 and compare its hash with `SHA256SUMS.txt`. In Windows PowerShell, run
-`Get-FileHash .\networkmonitor-esp32-s3-live-factory-0.2.1.bin -Algorithm SHA256`
+`Get-FileHash .\networkmonitor-esp32-s3-live-factory-0.2.2.bin -Algorithm SHA256`
 and compare the `Hash` value with that file.
 
 ## 2. Install the serial flashing tool
@@ -70,7 +70,7 @@ On Linux or macOS, from the directory containing the downloaded `.bin`:
 
 ```sh
 python -m esptool --chip esp32s3 --port /dev/ttyACM0 erase-flash
-python -m esptool --chip esp32s3 --port /dev/ttyACM0 write-flash 0x0 networkmonitor-esp32-s3-live-factory-0.2.1.bin
+python -m esptool --chip esp32s3 --port /dev/ttyACM0 write-flash 0x0 networkmonitor-esp32-s3-live-factory-0.2.2.bin
 ```
 
 For example, if the port listing showed `/dev/ttyUSB0`, replace both instances
@@ -80,7 +80,7 @@ the same commands with the port and filename in variables:
 
 ```powershell
 $Port = "COM3"
-$Image = "networkmonitor-esp32-s3-live-factory-0.2.1.bin"
+$Image = "networkmonitor-esp32-s3-live-factory-0.2.2.bin"
 python -m esptool --chip esp32s3 --port $Port erase-flash
 python -m esptool --chip esp32s3 --port $Port write-flash 0x0 $Image
 ```
@@ -103,10 +103,23 @@ Windows or `/dev/cu.usbmodem…` on macOS).
 
 The device asks for the 2.4 GHz Wi-Fi SSID and password. Type each at its
 prompt; the firmware does not echo the input. After connecting, it prints an
-OAuth sign-in URL and user code. Open the URL in a browser, enter the code,
-and authorize with your Network Monitor account. Watch the serial output for
-successful registration and `ESP32_S3_MQTT_READY`. Keep the serial log private
-while the short-lived code is visible.
+line beginning `nm_enrollment: Sign in at`, followed by an HTTPS URL and a
+short user code. Copy only the URL (not the trailing `; code ...`) into a
+browser on your computer or phone. Leave the board powered and the serial
+console open. Sign in with your Network Monitor account and approve the
+device; if the page asks for a code, enter the code printed on the serial
+console. The URL may already include it.
+
+Return to the serial console and wait for successful registration and
+`ESP32_S3_MQTT_READY`. Browser approval alone does not confirm registration.
+If the code expires, restart the board to obtain a new URL and code. Keep
+the serial log private while the short-lived code is visible.
+
+Erasing flash clears the board's local configuration and saved monitoring
+state, so Wi-Fi setup and browser authorization are required again. It does
+not delete your website's processor or host records. Registering the same
+board to the same account can restore its previously assigned hosts from
+the backend; that does not mean the erase failed.
 
 ## 6. Assign hosts and update later
 

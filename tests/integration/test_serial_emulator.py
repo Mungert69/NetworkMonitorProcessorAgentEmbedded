@@ -76,7 +76,7 @@ def main():
              f'--output {relative}/config.bin && '
              'python "$IDF_PATH/components/nvs_flash/nvs_partition_generator/nvs_partition_gen.py" '
              f'generate {relative}/state.csv {relative}/state.bin 0x200000')
-    subprocess.run([str(ROOT/"tools/idf-local.sh"),"bash","-lc",command],
+    subprocess.run([str(ROOT/"tools/idf-local.sh"),"bash","-c",command],
                    cwd=ROOT/"firmware",check=True,capture_output=True)
     image=bytearray(b"\xff"*(16*1024*1024))
     build=ROOT/"firmware/build"

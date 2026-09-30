@@ -5,13 +5,15 @@
 #include <string.h>
 
 typedef struct { char text[65]; size_t used; bool overflow, skip_lf; } nm_wifi_input;
-/* One bounded, non-echoed line; reject controls, drain overflow, support CRLF. */
+/* One bounded, non-echoed line; reject controls, drain overflow, support CRLF.
+ * Ignore empty lines, including extra line endings translated by a serial driver.
+ * Return 1 for a nonempty line, -1 for rejected input, or 0 while waiting. */
 static inline int nm_wifi_input_feed(nm_wifi_input *s,unsigned char c)
 {
     if (s->skip_lf) { s->skip_lf=false; if (c=='\n') return 0; }
     if (c=='\r' || c=='\n') {
         s->skip_lf=c=='\r'; s->text[s->used]=0;
-        int result=s->overflow ? -1 : 1;
+        int result=s->overflow ? -1 : (s->used ? 1 : 0);
         s->used=0; s->overflow=false; return result;
     }
     if ((c==8 || c==127) && !s->overflow) {
