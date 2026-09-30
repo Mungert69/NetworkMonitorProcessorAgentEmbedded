@@ -25,6 +25,9 @@ typedef struct {
     atomic_bool connected;
     atomic_bool updating;
     atomic_bool firmware_status_sent;
+    atomic_uint mqtt_queue_high_water;
+    atomic_uint mqtt_queue_drops;
+    atomic_uint mqtt_allocation_failures;
     unsigned subscriptions;
     unsigned poll_seconds;
     TickType_t last_resource_tick;

@@ -54,13 +54,23 @@ void nm_processor_mqtt_event(void *arg, esp_event_base_t base, int32_t id, void 
         command incoming = {0};
         memcpy(incoming.topic, event->topic, (size_t)event->topic_len);
         incoming.body = nm_bulk_malloc((size_t)event->data_len + 1);
-        if (!incoming.body)
+        if (!incoming.body) {
+            atomic_fetch_add(&agent->mqtt_allocation_failures, 1);
+            ESP_LOGW(TAG, "MQTT command allocation failed bytes=%d", event->data_len + 1);
             break;
+        }
         memcpy(incoming.body, event->data, (size_t)event->data_len);
         incoming.body[event->data_len] = 0;
         if (xQueueSend(agent->queue, &incoming, 0) != pdTRUE) {
+            atomic_fetch_add(&agent->mqtt_queue_drops, 1);
             ESP_LOGW(TAG, "MQTT command queue full");
             free(incoming.body);
+        } else {
+            unsigned depth = (unsigned)uxQueueMessagesWaiting(agent->queue);
+            unsigned peak = atomic_load(&agent->mqtt_queue_high_water);
+            while (depth > peak &&
+                   !atomic_compare_exchange_weak(&agent->mqtt_queue_high_water, &peak, depth)) {
+            }
         }
         break;
     case MQTT_EVENT_ERROR:

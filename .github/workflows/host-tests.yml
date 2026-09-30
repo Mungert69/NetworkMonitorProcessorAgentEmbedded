@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,17 +18,39 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
+          fetch-depth: 0
           persist-credentials: false
       - name: Install native test dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake libbrotli-dev libssl-dev
+      - name: Check whitespace
+        run: |
+          if [[ "${{ github.event_name }}" == pull_request ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
+          elif [[ "${{ github.event_name }}" == push ]]; then
+            git diff --check "${{ github.event.before }}...${{ github.sha }}"
+          else
+            git diff --check HEAD^ HEAD
+          fi
       - name: Configure
-        run: cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer'
       - name: Build
         run: cmake --build build-tests -j 2
       - name: Test
         run: ctest --test-dir build-tests --output-on-failure
       - name: Tooling tests
         run: python3 -m unittest discover -s tests/tooling
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Mungert69/NetworkMonitorLib
+          path: NetworkMonitorLib
+          persist-credentials: false
+      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+        with:
+          dotnet-version: 10.0.112
+      - name: Verify .NET-derived fixtures
+        env:
+          NETWORK_MONITOR_LIB_ROOT: ${{ github.workspace }}/NetworkMonitorLib
+        run: bash tests/dotnet/generate.sh --check-compatible
   firmware-and-brotli:
     runs-on: ubuntu-24.04
     steps:
@@ -44,6 +69,9 @@ jobs:
           espsecure.py generate_signing_key --version 2 private-ota-signing-key.pem
           idf.py -D SDKCONFIG=sdkconfig.production build
           test -s build/networkmonitor_processor_esp32.bin
+          app_bytes=$(stat -c %s build/networkmonitor_processor_esp32.bin)
+          test "$app_bytes" -le $((0x600000))
+          echo "Signed application: $app_bytes / $((0x600000)) bytes"
       - name: Run specialized Brotli tests
         # The ESP-IDF installer prepends the Xtensa toolchain to PATH. These
         # are host tests; force the runner's native compiler and assembler.

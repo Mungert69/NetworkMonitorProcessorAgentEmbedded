@@ -19,11 +19,15 @@ static bool yield_commands(void *context)
     if ((TickType_t)(now - agent->last_resource_tick) >= pdMS_TO_TICKS(10000)) {
         ESP_LOGI(TAG,
                  "resources phase=active internal_free=%u internal_min=%u "
-                 "psram_free=%u psram_min=%u",
+                 "psram_free=%u psram_min=%u mqtt_queue=%u mqtt_queue_peak=%u "
+                 "mqtt_queue_drops=%u mqtt_alloc_failures=%u",
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                  (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
-                 (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
+                 (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
+                 (unsigned)uxQueueMessagesWaiting(agent->queue),
+                 atomic_load(&agent->mqtt_queue_high_water), atomic_load(&agent->mqtt_queue_drops),
+                 atomic_load(&agent->mqtt_allocation_failures));
         agent->last_resource_tick = now;
     }
     command incoming;
@@ -42,6 +46,9 @@ void nm_esp_processor_run(const nm_esp_config *config)
     atomic_init(&agent->connected, false);
     atomic_init(&agent->updating, false);
     atomic_init(&agent->firmware_status_sent, false);
+    atomic_init(&agent->mqtt_queue_high_water, 0);
+    atomic_init(&agent->mqtt_queue_drops, 0);
+    atomic_init(&agent->mqtt_allocation_failures, 0);
     agent->config = config;
     agent->poll_seconds = config->poll_seconds;
     if (!nm_esp_storage_init()) {
@@ -76,8 +83,8 @@ void nm_esp_processor_run(const nm_esp_config *config)
         ESP_LOGE(TAG, "broker URI must use MQTT or MQTTS");
         goto fail;
     }
-    int out_size = nm_mqtt_out_size(config->routing_id, config->mqtt_username,
-                                    config->mqtt_password);
+    int out_size =
+        nm_mqtt_out_size(config->routing_id, config->mqtt_username, config->mqtt_password);
     if (!out_size) {
         ESP_LOGE(TAG, "MQTT CONNECT credentials exceed supported length");
         goto fail;
@@ -105,7 +112,8 @@ void nm_esp_processor_run(const nm_esp_config *config)
         ESP_LOGE(TAG, "MQTT startup failed");
         goto fail;
     }
-    ESP_LOGI(TAG, "processor started routing_id=%s max_monitors=%u pending_limit=%u command_queue=%u",
+    ESP_LOGI(TAG,
+             "processor started routing_id=%s max_monitors=%u pending_limit=%u command_queue=%u",
              config->routing_id, config->max_monitors, config->max_pending_ping_infos,
              (unsigned)NM_ESP_COMMAND_QUEUE_CAPACITY);
     TickType_t next_poll = xTaskGetTickCount() + pdMS_TO_TICKS(agent->poll_seconds * 1000);
@@ -137,14 +145,20 @@ void nm_esp_processor_run(const nm_esp_config *config)
              * validated against real device RAM. All values are bytes. */
             ESP_LOGI(TAG,
                      "resources internal_free=%u internal_min=%u largest_internal=%u "
-                     "psram_free=%u psram_min=%u proc_stack_min=%u worker_stack_min=%u",
+                     "psram_free=%u psram_min=%u proc_stack_min=%u worker_stack_min=%u "
+                     "mqtt_queue=%u mqtt_queue_peak=%u mqtt_queue_drops=%u "
+                     "mqtt_alloc_failures=%u",
                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                      (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
                      (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
                      (unsigned)uxTaskGetStackHighWaterMark(NULL),
-                     (unsigned)nm_probe_pool_worker_stack_free(probes));
+                     (unsigned)nm_probe_pool_worker_stack_free(probes),
+                     (unsigned)uxQueueMessagesWaiting(agent->queue),
+                     atomic_load(&agent->mqtt_queue_high_water),
+                     atomic_load(&agent->mqtt_queue_drops),
+                     atomic_load(&agent->mqtt_allocation_failures));
             if (!agent->updating)
                 nm_processor_publish_ready(agent, true);
             next_poll = xTaskGetTickCount() + pdMS_TO_TICKS(agent->poll_seconds * 1000);

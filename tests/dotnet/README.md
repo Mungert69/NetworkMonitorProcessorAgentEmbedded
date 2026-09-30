@@ -10,6 +10,7 @@ From the ESP32 repository root:
 ```sh
 bash tests/dotnet/generate.sh
 bash tests/dotnet/generate.sh --check
+bash tests/dotnet/generate.sh --check-compatible
 ```
 
 The first command rebuilds the oracle, runs its assertions and writes the JSON
@@ -19,6 +20,12 @@ Both exit nonzero on assertion/build failure; `--check` also fails for missing o
 changed fixtures. No test runner or NuGet test packages are necessary. Build
 outputs stay in the ignored `tests/dotnet/JsonParity/{bin,obj}` directories.
 Invoke with `bash`; executable permission is not required.
+
+`--check-compatible` compares the seven generated wire-contract fixtures while
+ignoring `manifest.json`. CI uses it with the current `NetworkMonitorLib` default
+branch so serialization or model-behaviour drift fails without treating an
+unrelated library commit as a contract change. Use strict `--check` when
+regenerating fixtures at the manifest's recorded source revision.
 
 The default layout is:
 

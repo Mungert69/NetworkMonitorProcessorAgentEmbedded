@@ -5,12 +5,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetworkMonitor.Objects;
 
-if (args.Length is < 2 or > 3 || (args.Length == 3 && args[2] != "--check"))
-    throw new ArgumentException("Usage: JsonParity <NetworkMonitorLib root> <output directory> [--check]");
+if (args.Length is < 2 or > 3 ||
+    (args.Length == 3 && args[2] is not ("--check" or "--check-compatible")))
+    throw new ArgumentException(
+        "Usage: JsonParity <NetworkMonitorLib root> <output directory> [--check|--check-compatible]");
 
 string libRoot = Path.GetFullPath(args[0]);
 string outputRoot = Path.GetFullPath(args[1]);
 bool check = args.Length == 3;
+bool compatible = args.Length == 3 && args[2] == "--check-compatible";
 // Deliberately not JsonSerializerDefaults.Web. These settings define this oracle profile.
 var options = new JsonSerializerOptions
 {
@@ -209,7 +212,8 @@ Emit("manifest.json", new
 // Validate all output before writing anything, or compare without changing fixtures.
 if (check)
 {
-    var mismatches = generated.Where(pair => !File.Exists(Path.Combine(outputRoot, pair.Key)) ||
+    var compared = compatible ? generated.Where(pair => pair.Key != "manifest.json") : generated;
+    var mismatches = compared.Where(pair => !File.Exists(Path.Combine(outputRoot, pair.Key)) ||
         File.ReadAllText(Path.Combine(outputRoot, pair.Key)) != pair.Value).Select(pair => pair.Key).ToArray();
     Require(mismatches.Length == 0, "Fixture drift: " + string.Join(", ", mismatches));
 }
@@ -218,7 +222,8 @@ else
     Directory.CreateDirectory(outputRoot);
     foreach (var (name, content) in generated) File.WriteAllText(Path.Combine(outputRoot, name), content);
 }
-Console.WriteLine($"{(check ? "Verified" : "Generated")} {generated.Count} fixture files; {probes.Count} deserialization assertions passed.");
+string action = compatible ? "Verified compatible" : check ? "Verified" : "Generated";
+Console.WriteLine($"{action} {generated.Count} fixture files; {probes.Count} deserialization assertions passed.");
 
 internal sealed record Probe(string Name, string Model, string Input, bool Accepted,
     JsonElement? Normalized, string? Exception, string? ExceptionPath);

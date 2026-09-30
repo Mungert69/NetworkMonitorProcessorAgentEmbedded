@@ -118,6 +118,9 @@ bash tests/dotnet/generate.sh --check
   command queue. It now has 64 slots for a 50-host addition burst plus
   control/ack commands; live burst delivery still needs testing. Bodies are
   separately owned and bounded to 384 KiB each, so this is not a byte budget.
+  Periodic resource logs report current and peak command-queue depth plus
+  cumulative queue-drop and command-body allocation-failure counts. These are
+  diagnostics only and do not change acknowledgement or retry behaviour.
   The runtime MQTT receive buffer is 384 KiB plus header headroom; ESP-MQTT
   allocates it with `malloc`, which the configured ESP-IDF allocator routes to
   PSRAM for allocations above 16 KiB. The command copy and decoded signed
