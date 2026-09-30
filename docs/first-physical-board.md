@@ -9,9 +9,11 @@ appsettings editing is required.
 
 Download the versioned factory `.bin` and `SHA256SUMS.txt` from the
 [latest GitHub release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest).
-Keep both files in the same directory. The current v0.2.2 image is named
-`networkmonitor-esp32-s3-live-factory-0.2.2.bin`; use the exact filename shown
-on the release page if you download a later version.
+Expand **Assets** on the release page and download the file whose name begins
+`networkmonitor-esp32-s3-live-factory-` and ends in `.bin`, plus
+`SHA256SUMS.txt`. Do not download the source-code archives to flash the board.
+Keep both files in the same directory. Use the exact downloaded filename;
+the version is part of the filename and changes with each release.
 
 Verify the image before flashing. On Linux:
 
@@ -19,10 +21,17 @@ Verify the image before flashing. On Linux:
 sha256sum -c SHA256SUMS.txt
 ```
 
-On macOS, run `shasum -a 256 networkmonitor-esp32-s3-live-factory-0.2.2.bin`
-and compare its hash with `SHA256SUMS.txt`. In Windows PowerShell, run
-`Get-FileHash .\networkmonitor-esp32-s3-live-factory-0.2.2.bin -Algorithm SHA256`
-and compare the `Hash` value with that file.
+On macOS, run `shasum -a 256 -c SHA256SUMS.txt`.
+In Windows PowerShell, run:
+
+```powershell
+$Image = Read-Host "Paste the exact downloaded factory .bin filename"
+Get-FileHash -LiteralPath $Image -Algorithm SHA256
+Get-Content SHA256SUMS.txt
+```
+
+Compare the `Hash` value with the matching checksum (letter case does not
+matter). Stop if verification fails; do not flash an unverified image.
 
 ## 2. Install the serial flashing tool
 
@@ -66,21 +75,24 @@ Wi-Fi settings, credentials and saved processor state. Use only for a new
 board. Never use this procedure to update an enrolled processor.** It does not
 burn eFuses.
 
-On Linux or macOS, from the directory containing the downloaded `.bin`:
+Close any serial monitor first. On Linux or macOS, from the directory
+containing the downloaded `.bin`, run the following commands. At the first
+prompt, paste its exact filename, including the version and `.bin` extension:
 
 ```sh
+printf 'Paste the exact downloaded factory .bin filename: '
+read -r IMAGE
 python -m esptool --chip esp32s3 --port /dev/ttyACM0 erase-flash
-python -m esptool --chip esp32s3 --port /dev/ttyACM0 write-flash 0x0 networkmonitor-esp32-s3-live-factory-0.2.2.bin
+python -m esptool --chip esp32s3 --port /dev/ttyACM0 write-flash 0x0 "$IMAGE"
 ```
 
 For example, if the port listing showed `/dev/ttyUSB0`, replace both instances
-of `/dev/ttyACM0` with `/dev/ttyUSB0`. If you downloaded a later release, use
-its exact `.bin` filename in the second command. In Windows PowerShell, use
+of `/dev/ttyACM0` with `/dev/ttyUSB0`. In Windows PowerShell, use
 the same commands with the port and filename in variables:
 
 ```powershell
 $Port = "COM3"
-$Image = "networkmonitor-esp32-s3-live-factory-0.2.2.bin"
+$Image = Read-Host "Paste the exact downloaded factory .bin filename"
 python -m esptool --chip esp32s3 --port $Port erase-flash
 python -m esptool --chip esp32s3 --port $Port write-flash 0x0 $Image
 ```
@@ -102,7 +114,7 @@ Substitute the same serial port you used to flash (for example `COM3` on
 Windows or `/dev/cu.usbmodem…` on macOS).
 
 The device asks for the 2.4 GHz Wi-Fi SSID and password. Type each at its
-prompt; the firmware does not echo the input. After connecting, it prints an
+prompt; the firmware does not echo the input. After connecting, it prints a
 line beginning `nm_enrollment: Sign in at`, followed by an HTTPS URL and a
 short user code. Copy only the URL (not the trailing `; code ...`) into a
 browser on your computer or phone. Leave the board powered and the serial
