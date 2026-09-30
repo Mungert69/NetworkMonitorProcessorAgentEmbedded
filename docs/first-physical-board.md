@@ -9,14 +9,20 @@ appsettings editing is required.
 
 Download the versioned factory `.bin` and `SHA256SUMS.txt` from the
 [latest GitHub release](https://github.com/Mungert69/NetworkMonitorProcessorAgentEmbedded/releases/latest).
-Keep both files in the same directory and verify the image before flashing:
+Keep both files in the same directory. The current v0.2.1 image is named
+`networkmonitor-esp32-s3-live-factory-0.2.1.bin`; use the exact filename shown
+on the release page if you download a later version.
+
+Verify the image before flashing. On Linux:
 
 ```sh
 sha256sum -c SHA256SUMS.txt
 ```
 
-On Windows, use `Get-FileHash -Algorithm SHA256 <image-file>` and compare its
-output with the matching line in `SHA256SUMS.txt`.
+On macOS, run `shasum -a 256 networkmonitor-esp32-s3-live-factory-0.2.1.bin`
+and compare its hash with `SHA256SUMS.txt`. In Windows PowerShell, run
+`Get-FileHash .\networkmonitor-esp32-s3-live-factory-0.2.1.bin -Algorithm SHA256`
+and compare the `Hash` value with that file.
 
 ## 2. Install the serial flashing tool
 
@@ -35,12 +41,24 @@ On Windows PowerShell, use `py -m venv .venv`, then
 On Linux, the account must have access to the serial device (often by joining
 the `dialout` group and signing in again).
 
-## 3. Erase and flash the new board
+## 3. Find the board's serial port
 
-Connect the board using a USB data cable. Find its port: `/dev/ttyACM0` or
-`/dev/ttyUSB0` on Linux, `/dev/cu.*` on macOS, or `COM3` (for example) on
-Windows. For a new board that is not entering download mode automatically,
-hold **BOOT**, tap **RESET/EN**, then release **BOOT**.
+Connect the board using a USB data cable, then run:
+
+```sh
+python -m serial.tools.list_ports -v
+```
+
+Use the port reported for the ESP32-S3: it commonly looks like
+`/dev/ttyACM0` or `/dev/ttyUSB0` on Linux, `/dev/cu.usbmodem…` on macOS, or
+`COM3` on Windows. On Linux, `ls -l /dev/serial/by-id/` may show a stable
+device-specific path. In the examples below, replace `/dev/ttyACM0` or `COM3`
+with the exact port reported on your computer.
+
+## 4. Erase and flash the new board
+
+If a new board does not automatically enter download mode, hold **BOOT**, tap
+**RESET/EN**, then release **BOOT**.
 
 The following commands erase the entire flash, then write the single factory
 image at address `0x0`. **This permanently removes any existing firmware,
@@ -48,23 +66,40 @@ Wi-Fi settings, credentials and saved processor state. Use only for a new
 board. Never use this procedure to update an enrolled processor.** It does not
 burn eFuses.
 
+On Linux or macOS, from the directory containing the downloaded `.bin`:
+
 ```sh
-python -m esptool --chip esp32s3 --port YOUR_PORT erase-flash
-python -m esptool --chip esp32s3 --port YOUR_PORT write-flash 0x0 networkmonitor-esp32-s3-live-factory-VERSION.bin
+python -m esptool --chip esp32s3 --port /dev/ttyACM0 erase-flash
+python -m esptool --chip esp32s3 --port /dev/ttyACM0 write-flash 0x0 networkmonitor-esp32-s3-live-factory-0.2.1.bin
 ```
 
-Replace `YOUR_PORT` and `VERSION` with the actual port and image version. For
-example, Linux users may use `/dev/ttyACM0`. Keep the flash mode options at
-their defaults; the image includes the tested bootloader configuration.
+For example, if the port listing showed `/dev/ttyUSB0`, replace both instances
+of `/dev/ttyACM0` with `/dev/ttyUSB0`. If you downloaded a later release, use
+its exact `.bin` filename in the second command. In Windows PowerShell, use
+the same commands with the port and filename in variables:
 
-## 4. Connect Wi-Fi and authorize
+```powershell
+$Port = "COM3"
+$Image = "networkmonitor-esp32-s3-live-factory-0.2.1.bin"
+python -m esptool --chip esp32s3 --port $Port erase-flash
+python -m esptool --chip esp32s3 --port $Port write-flash 0x0 $Image
+```
+
+Set `$Port` to the reported COM port, and `$Image` to the exact `.bin` filename
+you downloaded. Keep the flash mode options at their defaults; the image
+includes the tested bootloader configuration.
+
+## 5. Connect Wi-Fi and authorize
 
 Open the USB serial console at **115200 baud**. For example, with the same
 Python environment:
 
 ```sh
-python -m serial.tools.miniterm YOUR_PORT 115200
+python -m serial.tools.miniterm /dev/ttyACM0 115200
 ```
+
+Substitute the same serial port you used to flash (for example `COM3` on
+Windows or `/dev/cu.usbmodem…` on macOS).
 
 The device asks for the 2.4 GHz Wi-Fi SSID and password. Type each at its
 prompt; the firmware does not echo the input. After connecting, it prints an
@@ -73,7 +108,7 @@ and authorize with your Network Monitor account. Watch the serial output for
 successful registration and `ESP32_S3_MQTT_READY`. Keep the serial log private
 while the short-lived code is visible.
 
-## 5. Assign hosts and update later
+## 6. Assign hosts and update later
 
 In the website dashboard, add hosts and assign them to this processor. The
 ESP32-S3 supports ICMP, DNS, TCP, HTTP/HTTPS and passive BLE broadcast
