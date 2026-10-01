@@ -24,26 +24,31 @@ complete corresponding source available to recipients.
 
 Before publishing a factory or OTA image:
 
-1. Publish the matching project commit and complete source for the exact
-   wolfSSL, yyjson, Brotli, ESP-MQTT and other covered build inputs, including
-   local changes, configuration, dependency pins, and scripts needed to build
-   and install the image. A GitHub-generated source archive alone omits Git
+1. Publish the matching project commit and corresponding-source archive.
+   `tools/package_corresponding_source.py` packages the project, exact Git
+   submodules, checksum-verified Brotli and ESP-MQTT sources, build config,
+   scripts, dependency lock, notices and SBOM. ESP-IDF is pinned to the exact
+   upstream commit recorded in the archive manifest and fetched from that
+   immutable revision. A GitHub-generated source archive alone omits Git
    submodule contents; do not present it as the complete source package.
 2. Include GPLv3 and the applicable third-party copyright/license notices
    with the release. Link each binary to its matching source package and give
    recipients the rights required by those licenses. A link to a moving branch
    or to an unrelated newer source revision is not sufficient.
 3. Do not include Wi-Fi credentials, OAuth tokens, enrolled flash, or the
-   operator's private OTA signing key in a public source package. Signing an
-   official image does not grant a right to withhold installation information
-   required by GPLv3 section 6 where that section applies. Document the
-   user-controlled ROM/factory flashing route for boards on which modified
-   firmware can be installed without the operator's signing key; review any
-   future Secure Boot or locked-bootloader policy before shipping devices.
+   operator's private OTA signing key in a public source package. This build
+   enables signed application images but does not enable hardware Secure Boot
+   or flash encryption. The documented ROM factory-flash procedure replaces
+   the bootloader and application; a user can build a factory image with a
+   signing key they control and install it over USB. The official OTA key is
+   not needed for that route, which erases existing device configuration.
+   Recheck this installation information if hardware Secure Boot, flash
+   encryption or a locked ROM-download policy is enabled in a future build.
 4. Test the source package by building from a clean checkout with its
-   dependencies, then run the normal firmware and hardware checks. Do not
-   publish a wolfSSL-backed image before these release checks are complete.
+   dependencies, then run the normal firmware and hardware checks.
 
-The public factory images currently linked from the end-user setup guide are
-separate releases. This document does not claim that an unpublished quantum
-image has passed the release checks above.
+The v0.3.0 source package is stored in
+`release-source/NetworkMonitorProcessorAgentEmbedded-v0.3.0-source.tar.gz`.
+Attach it and the matching `THIRD_PARTY_NOTICES.md`, SBOM and checksum file to
+the same GitHub release as the factory image. It is also committed here so
+recipients can obtain it independently of GitHub's generated source archives.
