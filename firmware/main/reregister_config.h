@@ -22,7 +22,7 @@ static inline yyjson_mut_doc *nm_factory_config(yyjson_mut_val *old)
     if (!root) { yyjson_mut_doc_free(doc); return NULL; }
     bool ok=yyjson_mut_obj_add_bool(doc,root,"AuthDevice",true) &&
         yyjson_mut_obj_add_bool(doc,root,"WiFiSetup",true) &&
-        yyjson_mut_obj_add_bool(doc,root,"IsQuantumCapable",false) &&
+        yyjson_mut_obj_add_bool(doc,root,"IsQuantumCapable",true) &&
         yyjson_mut_obj_add_uint(doc,root,"max_monitors",50) &&
         yyjson_mut_obj_add_uint(doc,root,"max_pending_ping_infos",500) &&
         yyjson_mut_obj_add_uint(doc,root,"MaxTaskQueueSize",NM_PROBE_DEFAULT_WORKERS) &&

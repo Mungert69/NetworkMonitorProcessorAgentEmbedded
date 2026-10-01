@@ -11,6 +11,11 @@ __asm__(".pushsection .rodata\n"
         "_binary_command_signing_public_pem_start: .byte 1,2,3,4\n"
         ".global _binary_command_signing_public_pem_end\n"
         "_binary_command_signing_public_pem_end:\n.popsection\n");
+__asm__(".pushsection .rodata\n"
+        ".global _binary_command_signing_mldsa_public_pem_start\n"
+        "_binary_command_signing_mldsa_public_pem_start: .byte 1,2,3,4\n"
+        ".global _binary_command_signing_mldsa_public_pem_end\n"
+        "_binary_command_signing_mldsa_public_pem_end:\n.popsection\n");
 
 static unsigned calls, ready, health, verified;
 static bool valid_signature = true, operation_ok = true;
@@ -28,6 +33,16 @@ yyjson_mut_doc *nm_command_verify(yyjson_mut_val *data, const char *operation, c
     assert(!strcmp(target, "owned-route") && key && size == 4);
     ++verified;
     return valid_signature ? nm_json_clone(data) : NULL;
+}
+yyjson_mut_doc *nm_command_verify_mldsa_event(const char *message, size_t length,
+                                              const char *operation, const char *target,
+                                              const unsigned char *key, size_t size)
+{
+    yyjson_mut_doc *doc = nm_json_read(message, length);
+    yyjson_mut_doc *result = nm_command_verify(
+        yyjson_mut_obj_get(yyjson_mut_doc_get_root(doc), "data"), operation, target, key, size);
+    yyjson_mut_doc_free(doc);
+    return result;
 }
 bool nm_processor_publish_ready(processor *agent, bool value)
 {
@@ -147,6 +162,16 @@ int main(void)
     send(&agent, "owned-route", "removePingInfos", "{broken");
     send(&agent, "owned-route", "processorAlertFlag", "{\"data\":{}}");
     assert(calls == before);
+    config.is_quantum_capable = true;
+    for (size_t i = 0; i < 4; ++i) {
+        before = calls;
+        valid_signature = false;
+        send(&agent, "owned-route", protected_ops[i], object);
+        assert(calls == before);
+        valid_signature = true;
+        send(&agent, "owned-route", protected_ops[i], object);
+        assert(calls == before + 1);
+    }
     puts("Command dispatcher: all 11 operations, signature gating, AuthKey, routing and malformed "
          "input passed");
     return 0;

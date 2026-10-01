@@ -33,5 +33,6 @@ nm_esp_result nm_endpoint_check_icmp(const char *, unsigned);
 nm_esp_result nm_endpoint_check_dns(const char *, unsigned);
 nm_esp_result nm_endpoint_check_tcp(const char *, unsigned, unsigned);
 nm_esp_result nm_endpoint_check_http(const char *, const char *, unsigned, unsigned);
+nm_esp_result nm_endpoint_check_quantum(const char *, const char *, unsigned, unsigned);
 nm_esp_result nm_endpoint_check_ble(const nm_monitor_record *, unsigned);
 #endif

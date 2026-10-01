@@ -1198,12 +1198,38 @@ static void test_reboot_between_cycles(void)
     yyjson_mut_doc_free(ack);
 }
 
+static void test_registration_handoff_snapshot(void)
+{
+    reset();
+    nm_esp_state *s = nm_esp_state_new(&config);
+    CHECK(s);
+    yyjson_mut_doc *reply = parse("{\"TotalReset\":true,\"MonitorIPs\":[]}");
+    CHECK(nm_esp_state_init(s, &config, ROOT(reply)));
+    CHECK(nm_esp_state_monitor_count(s) == 0);
+    yyjson_mut_doc_free(reply);
+    reply = parse("{\"TotalReset\":true,\"MonitorIPs\":[{\"ID\":7,\"Address\":\"handoff.test\","
+                  "\"EndPointType\":\"http\",\"Enabled\":false}]}");
+    CHECK(nm_esp_state_init(s, &config, ROOT(reply)));
+    fail_save_at = save_calls + 1;
+    CHECK(!nm_esp_state_save(s));
+    CHECK(nm_esp_state_monitor_count(s) == 1);
+    fail_save_at = 0;
+    CHECK(nm_esp_state_save(s));
+    nm_esp_state_free(s);
+    s = nm_esp_state_new(&config); /* Enrollment client hands over to runtime. */
+    CHECK(s && nm_esp_state_monitor_count(s) == 1);
+    CHECK(probe_count == 0);
+    nm_esp_state_free(s);
+    yyjson_mut_doc_free(reply);
+}
+
 int main(int argc, char **argv)
 {
     const struct {
         const char *name;
         void (*run)(void);
     } tests[] = {{"base64", test_base64},
+                 {"registration_handoff_snapshot", test_registration_handoff_snapshot},
                  {"commands_ram_only", test_commands_ram_only},
                  {"reboot_between_cycles", test_reboot_between_cycles},
                  {"message_publication", test_message_publication},

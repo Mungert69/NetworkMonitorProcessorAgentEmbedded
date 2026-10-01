@@ -110,8 +110,9 @@ It does not need a shared `usersetup` connection or an HTTP registration endpoin
 
 `ProcessorObj.IsQuantumCapable` selects the backend signer. Missing/default
 capability remains `true` for existing .NET processors (ML-DSA-65).
-ESP32's public templates explicitly set it to `false`, and authenticated
-registration/readiness announce that value. Signers use shared processor state,
+This quantum branch defaults ESP32 public templates to `true`; an explicit
+`false` selects the existing ECDSA profile. Authenticated registration/readiness
+announce the configured value. Signers use shared processor state,
 not hard-coded AppID lists or a guess based on transport.
 
 Apply Data's `ProcessorIsQuantumCapable` migration and deploy backends built
@@ -145,11 +146,23 @@ read-only. Do not generate a replacement key to fix a missing mount.
 This is a different key from the OTA application signing key used by
 `tools/build-firmware.sh`.
 
-The C verifier accepts version-1 `ES256` envelopes: base64 exact payload bytes
-and a DER-encoded P-256/SHA-256 signature. The signed payload binds operation,
-routing ID and JSON using three big-endian length-prefixed fields.
+With `IsQuantumCapable=false`, the C verifier accepts version-1 `ES256`
+envelopes: base64 exact payload bytes and a DER-encoded P-256/SHA-256 signature.
+With `true`, it accepts the original .NET object containing `BackendSignature`,
+using wolfSSL ML-DSA-65 and the permanent .NET public trust anchor compiled from
+`firmware/main/command-signing-mldsa-public.pem`. It preserves the received JSON
+bytes, replacing only the signature value with `""`; it never reserializes the
+object or negotiates a weaker algorithm. Both profiles bind operation, routing
+ID and JSON using the same three big-endian length-prefixed fields.
 Verification precedes protected-command processing, with no unsigned or
 algorithm fallback. AuthKey checks are additional where required.
+
+Rebuild Data against the updated shared library before enrolling a quantum-capable
+device or using its OTA commands. The registry now signs `processorAuthKey` and
+both firmware commands with ML-DSA when that profile is selected; firmware command
+objects implement `IBackendSignedMessage`. Existing .NET command formats and the
+ECDSA envelope profile are preserved. Data continues to provide the separate
+`AuthKeySignature` consumed by .NET enrollment. No new migration, key or topic is needed.
 
 Protected operations include initialization, monitor updates, registration's
 AuthKey reply and both OTA commands. Connect/wakeup, ordinary result
@@ -176,3 +189,16 @@ and application `removePingInfos` acknowledgements. MQTT connection/PUBACK alone
 does not prove that the backend accepted or persisted results.
 Use [the guide's OTA procedure](guide.md#build-and-publish-ota-firmware) separately
 to stage a verified application image; never publish provisioned flash.
+
+## Registration-to-runtime handoff
+
+Enrollment subscribes to both `processorAuthKey` and `processorInit` before
+publishing its authenticated registration request. Both replies must pass the
+configured signature verifier. The initialization AuthKey must match the
+verified registration AuthKey; an optional nonempty AppID must match the device.
+Reply arrival order does not matter. Enrollment applies and saves the full
+initialization before closing its MQTT connection, so the runtime loads the
+registered hosts without depending on a subsequent Data restart. Missing,
+invalid or unsaved initialization fails enrollment rather than reporting success
+with an empty temporary model. This enrollment snapshot is a deliberate rare
+exception to normal once-per-monitoring-cycle persistence.

@@ -38,6 +38,12 @@ class FactoryImageConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "credentials"):
                 public_live_config(template)
 
+    def test_quantum_capable_live_template(self):
+        with tempfile.TemporaryDirectory() as folder:
+            template = Path(folder) / "live.json"
+            template.write_text('{"AuthDevice":true,"IsQuantumCapable":true,"LoadServer":"example.test"}')
+            self.assertTrue(json.loads(public_live_config(template))["IsQuantumCapable"])
+
     def test_requires_live_oauth_identity_settings(self):
         with tempfile.TemporaryDirectory() as folder:
             template = Path(folder) / "live.json"

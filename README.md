@@ -33,6 +33,20 @@ command-running processors or every endpoint available in the Windows and
 Docker agents. BLE monitoring requires the ESP32 board to be within radio range
 of the broadcasting device.
 
+The experimental `feature/wolfssl-quantum-endpoints` branch additionally
+implements quantum key-exchange and quantum-certificate probes. See its
+[scope and licensing notes](tests/integration/quantum/README.md); it is not a
+published factory/OTA release.
+
+## License
+
+Project-authored code and documentation are licensed under the
+[GNU General Public License, version 3 only](LICENSE) (GPL-3.0-only).
+Third-party components retain their own licenses; see
+[licensing and release requirements](docs/licensing.md). The wolfSSL-backed
+quantum firmware must be distributed with its corresponding source. Earlier
+versions released under MIT remain available under their original terms.
+
 ## Firmware updates and recovery
 
 After registration, choose **Profile → Device firmware** on the website to

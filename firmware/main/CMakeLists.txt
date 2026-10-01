@@ -6,7 +6,7 @@ idf_component_register(
         "enrollment.c" "enrollment_http.c" "enrollment_oauth.c" "enrollment_registration.c"
         # Runtime orchestration and message boundaries.
         "processor.c" "processor_mqtt.c" "processor_commands.c"
-        "processor_messages.c" "processor_ota.c" "message_publish.c" "command_security.c"
+        "processor_messages.c" "processor_ota.c" "message_publish.c" "command_security.c" "command_mldsa.c"
         # Bounded concurrent endpoint probing (model stays single-writer).
         "nm_probe_pool.c"
         # Typed model, snapshots and persistence.
@@ -15,11 +15,27 @@ idf_component_register(
         # Endpoint implementations and firmware installation.
         "endpoints.c" "endpoint_common.c" "endpoint_dns.c" "endpoint_dns_task.c" "endpoint_icmp.c"
         "endpoint_tcp.c" "endpoint_http.c" "endpoint_ble.c" "http_deadline.c" "ota.c"
+        "endpoint_quantum.c" "quantum_tls.c"
         "../../third_party/yyjson/src/yyjson.c"
     INCLUDE_DIRS "../../third_party/yyjson/src"
-    EMBED_TXTFILES "command-signing-public.pem"
+    EMBED_TXTFILES "command-signing-public.pem" "command-signing-mldsa-public.pem"
     REQUIRES esp_psram spi_flash esp_wifi esp_event esp_netif nvs_flash
              mqtt mbedtls lwip esp_http_client tcp_transport esp_timer esp_https_ota
-             app_update bt espressif__brotli)
+             app_update bt espressif__brotli quantum_wolfssl)
+if(NOT CMAKE_BUILD_EARLY_EXPANSION)
+    # Use IDF's public Mozilla roots, never the host store or a private test CA.
+    configure_file("$ENV{IDF_PATH}/components/mbedtls/esp_crt_bundle/cacrt_all.pem"
+        "${CMAKE_CURRENT_BINARY_DIR}/quantum_roots.pem" COPYONLY)
+    target_add_binary_data(${COMPONENT_LIB}
+        "${CMAKE_CURRENT_BINARY_DIR}/quantum_roots.pem" TEXT)
+endif()
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     YYJSON_DISABLE_UTILS=1 YYJSON_DISABLE_INCR_READER=1 YYJSON_DISABLE_NON_STANDARD=1)
+if(NM_COMMAND_BENCHMARK_FIXTURES AND NOT CMAKE_BUILD_EARLY_EXPANSION)
+    target_sources(${COMPONENT_LIB} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../tests/integration/command_benchmark/benchmark.c")
+    target_include_directories(${COMPONENT_LIB} PRIVATE "${NM_COMMAND_BENCHMARK_FIXTURES}")
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE NM_COMMAND_BENCHMARK)
+    if(NM_COMMAND_MLDSA_BENCHMARK)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE NM_COMMAND_MLDSA_BENCHMARK)
+    endif()
+endif()

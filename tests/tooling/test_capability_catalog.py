@@ -6,7 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 LIB = ROOT.parent / "NetworkMonitorLib"
-SUPPORTED = {"icmp", "dns", "rawconnect", "http", "httphtml", "https", "blebroadcast", "blebroadcastlisten"}
+SUPPORTED = {"icmp", "dns", "rawconnect", "http", "httphtml", "https", "blebroadcast", "blebroadcastlisten", "quantum", "quantumcert"}
 
 class CapabilityCatalogTests(unittest.TestCase):
     def test_templates_match_runtime_defaults(self):

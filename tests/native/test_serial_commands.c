@@ -71,6 +71,7 @@ int main(void)
     assert(yyjson_mut_get_uint(yyjson_mut_obj_get(fresh,"MaxOutstandingEndpointOperations"))==4);
     assert(fresh && yyjson_mut_is_true(yyjson_mut_obj_get(fresh,"WiFiSetup")));
     assert(yyjson_mut_is_true(yyjson_mut_obj_get(fresh,"AuthDevice")));
+    assert(yyjson_mut_is_true(yyjson_mut_obj_get(fresh,"IsQuantumCapable")));
     const char *factory_removed[]={"wifi_ssid","wifi_password","AppName","DeviceName","mqtt_password","auth_key"};
     for (unsigned i=0;i<6;++i) assert(!yyjson_mut_obj_get(fresh,factory_removed[i]));
     assert(!strcmp(yyjson_mut_get_str(yyjson_mut_obj_get(fresh,"LoadServer")),"fixture.invalid"));

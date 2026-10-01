@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+get_filename_component(REPO "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
+file(RELATIVE_PATH BUILD_RELATIVE "${REPO}" "${CMAKE_BINARY_DIR}")
+if(NOT BUILD_RELATIVE MATCHES "^\\.\\./")
+    message(FATAL_ERROR "This credential-bearing test must build outside the repository")
+endif()
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(nm_quantum_board_trial)

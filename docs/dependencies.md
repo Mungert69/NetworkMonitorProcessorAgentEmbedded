@@ -6,6 +6,13 @@ records the resolved packages and integrity hashes. `third_party/yyjson` is a
 Git submodule pinned by the parent commit. Pins make builds reproducible, not
 automatically secure: review upstream releases and advisories regularly.
 
+The quantum feature branch also pins wolfSSL in `third_party/wolfssl` as a Git
+submodule. Review its upstream security updates before changing that pin, and
+run the quantum native, firmware and board tests. Its open-source license is
+GPLv3; see [licensing and release requirements](licensing.md). A matching
+firmware source release must include the exact dependency sources, not only
+the superproject's automatically generated source archive.
+
 The weekly scheduled check compares yyjson's pinned release and Brotli/MQTT's
 exact manifest pins against their latest stable upstream releases. It opens one
 tracking issue when review is needed; it does not silently change a firmware

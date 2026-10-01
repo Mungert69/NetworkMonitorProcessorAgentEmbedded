@@ -13,6 +13,8 @@ tests/integration/http_deadline/sdkconfig
 tests/integration/http_deadline/sdkconfig.old
 tests/integration/psram_memory/sdkconfig
 tests/integration/psram_memory/sdkconfig.old
+tests/integration/quantum/idf/sdkconfig
+tests/integration/quantum/idf/sdkconfig.old
 tests/hardware/psram_probe/sdkconfig
 tests/hardware/psram_probe/sdkconfig.old
 tests/hardware/psram_probe_idf522/sdkconfig
@@ -57,6 +59,7 @@ PingParams
 ProcessorDataObj
 *.pem
 !firmware/main/command-signing-public.pem
+!firmware/main/command-signing-mldsa-public.pem
 
 # Editor and OS metadata
 .idea/
@@ -65,9 +68,11 @@ ProcessorDataObj
 *~
 .DS_Store
 
-!firmware/config/appsettings-dev.json
-!firmware/config/appsettings-live.json
-
 runtime/
 .qwen/
 qwen-code-export-*.json
+
+# Firmware images and device flash dumps stay outside the Git working tree.
+*.bin
+*.flash
+*.img

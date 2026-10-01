@@ -53,6 +53,7 @@ There is exactly one production implementation here: `firmware/main/`.
 | `tests/tooling/` | Offline tests for scripts, config generation and layout |
 | `tests/integration/` | Explicit signature, serial/emulator and HTTP/TLS tests |
 | `third_party/yyjson/` | Pinned application JSON library; Git submodule |
+| `third_party/wolfssl/` | Pinned quantum TLS library; Git submodule with its own GPLv3 license |
 | `runtime/` | Ignored private enrollment/config/emulator state, not release artifacts |
 
 Within `firmware/main/`, put work in the following places:
@@ -72,7 +73,7 @@ Within `firmware/main/`, put work in the following places:
 | `nm_probe_pool.c`, `nm_probe_pool.h` | Bounded concurrent endpoint-probe executor; endpoint I/O only, never touches the model |
 | `processor_messages.c`, `message_publish.c` | Ready/status payloads; shared event encoding/publication |
 | `processor_ota.c`, `ota.c` | OTA command/job coordination; installation and health/rollback lifecycle |
-| `command_security.c` | Command signature policy and verification |
+| `command_security.c`, `command_mldsa.c` | Signature policy, ES256 envelopes and byte-preserving ML-DSA-65 object verification |
 | `state.c` | Transactional model updates, probe cycles and delivery orchestration |
 | `monitor_model.c` | Monitoring/reconciliation/status transitions on typed records |
 | `monitor_record.c`, `monitor_snapshot.c` | Record ownership/JSON codec; snapshot encoding/loading/cloning |
@@ -85,6 +86,7 @@ Within `firmware/main/`, put work in the following places:
 | `ble_scanner.c`, `ble_filter.h`, `endpoint_ble.c` | Shared passive BLE scan, bounded AD filtering, BLE endpoint probe/decoding; no model mutations in callbacks |
 | `endpoint_common.c`, `http_deadline.c` | Shared endpoint helpers; request deadline/transport lifetime |
 | `endpoint_dns_task.c` | PSRAM DNS-task creation and internal-stack completion reaper |
+| `endpoint_quantum.c`, `quantum_tls.*` | Quantum endpoint mapping/bounded resolution; reusable wolfSSL TLS provider, no model mutations |
 
 `nm_capabilities.h` and its defaults describe supported capabilities.
 `endpoint_status.h` contains endpoint status/URL policy.
@@ -165,7 +167,11 @@ exercise the firmware's encoder in host publication/parity tests.
 - Use typed records/arrays for monitoring work. JSON belongs at command,
   persistence and publication boundaries. Do not reintroduce per-probe JSON
   clone/parse/serialize cycles. Use yyjson; do not add a second application JSON
-  library. Firmware uses ESP-IDF/mbedTLS, not host curl/OpenSSL.
+  library. Firmware uses ESP-IDF/mbedTLS, with wolfSSL for quantum endpoints on
+  the quantum feature branch, not host curl/OpenSSL. Do not replace MQTT/HTTP/OTA
+  TLS incidentally. This project's own code is GPL-3.0-only; wolfSSL and other
+  dependencies retain their own licenses. Follow `docs/licensing.md` before
+  publishing a combined image.
 - Work on a candidate model using copy-on-write APIs. Follow `state.c`:
   validate/mutate candidate, then replace active RAM state. A failed mutation
   releases the candidate and leaves live state unchanged. Do not save per probe
@@ -250,6 +256,10 @@ if (!nm_records_append(records, record)) {
 - Keep existing command signature/AuthKey gates and TLS hostname/certificate
   verification. Never add an unsigned fallback or insecure “test mode” to
   production code. Do not silently broaden the signature policy either.
+  `quantumcert` is the deliberate .NET-compatible certificate observation
+  exception: it classifies the presented leaf independently of CA trust, dates
+  and hostname. Its per-session policy must never be reused for application
+  traffic or for the verified `quantum` endpoint.
 - Registration uses OAuth-authenticated MQTT and a verified AuthKey reply.
   Do not restore shared `usersetup` bootstrap credentials or add an HTTP
   registration endpoint as a convenience.

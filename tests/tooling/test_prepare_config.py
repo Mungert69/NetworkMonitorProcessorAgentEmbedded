@@ -36,7 +36,7 @@ class ConfigTests(unittest.TestCase):
     def test_defaults_have_no_broker_credentials(self):
         config = configuration("wifi", "password")
         self.assertIs(config["AuthDevice"], True)
-        self.assertIs(config["IsQuantumCapable"], False)
+        self.assertIs(config["IsQuantumCapable"], True)
         self.assertNotIn("mqtt_password", config)
         self.assertNotIn("auth_key", config)
         self.assertNotIn("app_id", config)

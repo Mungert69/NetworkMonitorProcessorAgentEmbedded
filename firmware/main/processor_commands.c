@@ -7,6 +7,9 @@ static const char *TAG = "nm_processor";
 extern const unsigned char
     command_public_key_start[] asm("_binary_command_signing_public_pem_start");
 extern const unsigned char command_public_key_end[] asm("_binary_command_signing_public_pem_end");
+extern const unsigned char
+    command_mldsa_start[] asm("_binary_command_signing_mldsa_public_pem_start");
+extern const unsigned char command_mldsa_end[] asm("_binary_command_signing_mldsa_public_pem_end");
 static bool key_matches(const processor *agent, yyjson_mut_val *data)
 {
     const char *key = string_field(data, "AuthKey");
@@ -34,10 +37,16 @@ void nm_processor_dispatch(processor *agent, const command *message)
         goto done;
     if (nm_command_requires_signature(operation)) {
         verified =
-            nm_command_verify(data, operation, agent->config->routing_id, command_public_key_start,
-                              (size_t)(command_public_key_end - command_public_key_start));
+            agent->config->is_quantum_capable
+                ? nm_command_verify_mldsa_event(message->body, strlen(message->body), operation,
+                                                agent->config->routing_id, command_mldsa_start,
+                                                (size_t)(command_mldsa_end - command_mldsa_start))
+                : nm_command_verify(data, operation, agent->config->routing_id,
+                                    command_public_key_start,
+                                    (size_t)(command_public_key_end - command_public_key_start));
         if (!verified) {
-            ESP_LOGW(TAG, "command %s rejected: missing or invalid ECDSA signature", operation);
+            ESP_LOGW(TAG, "command %s rejected: missing or invalid %s signature", operation,
+                     agent->config->is_quantum_capable ? "ML-DSA-65" : "ECDSA");
             goto done;
         }
         data = yyjson_mut_doc_get_root(verified);

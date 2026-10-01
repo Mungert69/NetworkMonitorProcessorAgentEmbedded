@@ -95,6 +95,11 @@ static int socket_family, connect_mode;
 static unsigned select_calls;
 static const nm_monitor_record *ble_monitor_seen;
 static unsigned ble_timeout_seen;
+nm_esp_result nm_endpoint_check_quantum(const char *host, const char *type, unsigned port, unsigned timeout)
+{
+    (void)host; (void)type; (void)port; (void)timeout;
+    return (nm_esp_result){.ok = true};
+}
 nm_esp_result nm_endpoint_check_ble(const nm_monitor_record *monitor, unsigned timeout)
 {
     ble_monitor_seen = monitor;
@@ -764,6 +769,12 @@ static void concurrent_operation_limits(void)
 
 int main(void)
 {
+    assert(nm_esp_endpoint_supported("quantum"));
+    assert(nm_esp_endpoint_supported("quantumcert"));
+    nm_monitor_record quantum = {.Address = "example.com", .EndPointType = "quantum", .Timeout = 15000};
+    assert(nm_esp_endpoint_run(&quantum).ok);
+    quantum.EndPointType = "quantumcert";
+    assert(nm_esp_endpoint_run(&quantum).ok);
     assert(nm_esp_endpoint_supported("blebroadcast"));
     assert(nm_esp_endpoint_supported("blebroadcastlisten"));
     nm_monitor_record ble = {.Address = "AA:BB:CC:DD:EE:FF",

@@ -11,6 +11,10 @@
 #include <string.h>
 
 static const char *TAG = "nm_processor";
+#ifdef NM_COMMAND_BENCHMARK
+bool nm_command_benchmark_setup(nm_esp_state *state, const nm_esp_config *config);
+void nm_command_benchmark_cycle(void);
+#endif
 /* Called at safe probe/publication checkpoints; dispatch never starts another cycle. */
 static bool yield_commands(void *context)
 {
@@ -61,6 +65,10 @@ void nm_esp_processor_run(const nm_esp_config *config)
         ESP_LOGE(TAG, "processor allocation failed");
         goto fail;
     }
+#ifdef NM_COMMAND_BENCHMARK
+    if (!nm_command_benchmark_setup(agent->state, config))
+        goto fail;
+#endif
     nm_esp_state_set_yield(agent->state, yield_commands, agent);
     if (!nm_esp_endpoint_configure_limit(config->max_outstanding_endpoint_operations)) {
         ESP_LOGE(TAG, "cannot configure outstanding endpoint operation limit");
@@ -138,8 +146,13 @@ void nm_esp_processor_run(const nm_esp_config *config)
         if (agent->connected && !agent->updating && !pending && !nm_esp_monitor_stopped() &&
             (int32_t)(now - next_poll) >= 0) {
             nm_processor_publish_ready(agent, false);
-            if (!nm_esp_state_cycle(agent->state, config, agent->client))
+            bool cycle_ok = nm_esp_state_cycle(agent->state, config, agent->client);
+            if (!cycle_ok)
                 ESP_LOGW(TAG, "monitor cycle failed or paused");
+#ifdef NM_COMMAND_BENCHMARK
+            if (cycle_ok)
+                nm_command_benchmark_cycle();
+#endif
             /* Per-cycle resource probe: heap headroom and the tightest task
              * stack high-water marks, so a concurrent-probe build can be
              * validated against real device RAM. All values are bytes. */

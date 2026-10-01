@@ -91,7 +91,7 @@ def registration(config: dict) -> tuple[str, str, bytes]:
         "Location": config["MonitorLocation"],
         "RabbitHost": uri.hostname,
         "MaxLoad": config["max_monitors"],
-        "IsQuantumCapable": False,
+        "IsQuantumCapable": config.get("IsQuantumCapable", True),
         "RabbitTopologyVersion": 2,
         "DisabledEndPointTypes": disabled,
         "DisabledCommands": commands,

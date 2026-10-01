@@ -36,4 +36,6 @@ fi
 
 cd "${repo_dir}/firmware"
 "${repo_dir}/tools/idf-local.sh" idf.py -B "$build_dir" \
-    -D "SDKCONFIG=$sdkconfig" reconfigure build
+    -D "SDKCONFIG=$sdkconfig" \
+    -D "NM_COMMAND_BENCHMARK_FIXTURES=${NM_COMMAND_BENCHMARK_FIXTURES:-}" \
+    -D "NM_COMMAND_MLDSA_BENCHMARK=${NM_COMMAND_MLDSA_BENCHMARK:-OFF}" reconfigure build

@@ -5,7 +5,8 @@ bool nm_esp_endpoint_supported(const char *type)
 {
     return type && (!strcmp(type, "icmp") || !strcmp(type, "dns") || !strcmp(type, "rawconnect") ||
                     !strcmp(type, "http") || !strcmp(type, "httphtml") || !strcmp(type, "https") ||
-                    !strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten"));
+                    !strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten") ||
+                    !strcmp(type, "quantum") || !strcmp(type, "quantumcert"));
 }
 
 nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
@@ -30,6 +31,8 @@ nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
         return nm_endpoint_check_dns(address, timeout);
     if (!strcmp(type, "rawconnect"))
         return nm_endpoint_check_tcp(address, port, timeout);
+    if (!strcmp(type, "quantum") || !strcmp(type, "quantumcert"))
+        return nm_endpoint_check_quantum(address, type, port, timeout);
     if (!strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten"))
         return nm_endpoint_check_ble(monitor, timeout);
     return nm_endpoint_check_http(address, type, port, timeout);

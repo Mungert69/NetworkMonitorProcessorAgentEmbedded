@@ -70,10 +70,18 @@ with devices trusting the original key.
 | Artifact | Purpose | Distribution |
 | --- | --- | --- |
 | `firmware/config/appsettings-{dev,live}.json` | Public deployment templates | Safe to commit |
-| `firmware/build/networkmonitor_processor_esp32.bin` | Shared signed application | OTA artifact after verification |
+| Signed firmware `.bin` files | OTA or factory release artifacts | Keep outside the Git working tree; publish intentional public downloads as GitHub Release assets only |
 | Private generated configuration | Wi-Fi and initial deployment settings | Keep private |
-| Instance `merged-binary.bin` and `nmconfig.bin` | Initial provisioned flash/config | Keep private; never OTA |
-| Instance `runtime-flash.bin` | Enrolled credentials and mutable state | Keep private; never clone identities |
+| `merged-binary.bin`, `nmconfig.bin`, raw flash dumps, NVS images | Provisioned device contents | Keep private and outside the repository; never publish or OTA |
+| Instance `runtime-flash.bin` | Enrolled credentials and mutable state | Keep private; never clone identities or commit to Git |
+
+Never commit firmware images, factory images, OTA images, merged flash images,
+or device flash dumps to the Git repository. Build outputs belong in the ignored
+`firmware/build/` directory. Stage OTA files in the external
+`~/code/securefiles/{dev,live}/firmware/` directories. Public factory downloads,
+when deliberately released, are attached to a GitHub Release and are not Git
+repository files. Factory images containing credentials or device state must
+never be published.
 
 There is no separate dev/live application build or environment encoded by an image
 tag. Select the deployment in configuration; keep dev/live runtime state separate.
@@ -141,7 +149,7 @@ SystemUrls brokers, allowing load-balanced destinations without accepting arbitr
 broker connections. Missing or unknown hosts are rejected instead of falling back
 to the primary broker. Deploy Data 0.18.10 or later with this firmware change.
 Enrollment completes only after
-the reply's ECDSA signature, operation and target are verified. Credentials
+the reply's configured command signature, operation and target are verified. Credentials
 and `AuthDevice: false` are committed to NVS; reboot and OTA retain them.
 An enrolled device starts normally with `AuthDevice: false` and its saved credentials.
 
@@ -257,6 +265,11 @@ Firmware releases use `firmware/version.txt`; increment it before building an up
 
 ## Build and publish OTA firmware
 
+Before publishing a binary, follow the [licensing and matching-source
+checklist](licensing.md). In particular, the GitHub-generated source archives
+do not include the wolfSSL and yyjson submodules. A signed image is not a
+substitute for the corresponding source and applicable third-party notices.
+
 Update `firmware/version.txt` for a new release, run `./tools/build-firmware.sh`,
 and verify the signed application with ESP-IDF's `espsecure` tooling and the
 expected signing key. Staging validates metadata and hashing, **not signatures**.
@@ -343,27 +356,33 @@ updating a working device.
 ## Command signing (0.1.3+)
 
 The backend defaults to its existing ML-DSA behavior. Native OAuth provisioning
-sets `IsQuantumCapable: false` in the device configuration, and registration
+sets `IsQuantumCapable: true` on the quantum branch, and registration
 announces that capability before the backend signs its reply. Authenticated
 readiness also updates the ProcessorObj record and shared backend state.
 There are no AppID lists. See
 [backend integration](backend-integration.md#command-signing) for deployment settings.
-The pinned trust anchor is `firmware/main/command-signing-public.pem`. Never replace it
+The ECDSA trust anchor is `firmware/main/command-signing-public.pem`; the ML-DSA-65
+anchor is `firmware/main/command-signing-mldsa-public.pem`. Never replace either
 without a coordinated key transition. The command private key remains on the
 backend and is separate from the firmware image signing key.
 
-The envelope contains protocol version, algorithm, base64 exact signed payload
+An explicit `IsQuantumCapable: false` uses the existing envelope containing protocol version, algorithm, base64 exact signed payload
 and a DER ECDSA signature. The payload uses the same three big-endian
 length-prefixed fields as .NET: operation, processor routing ID and JSON.
 Verification happens before JSON command dispatch, with no unsigned fallback
-and no algorithm negotiation. Existing topics and unsigned .NET operations
+and no algorithm negotiation. `true` instead verifies the original .NET signed
+object with wolfSSL ML-DSA-65. The device preserves the signed JSON bytes and
+replaces only `BackendSignature` with an empty string when reconstructing the
+same length-prefixed payload. Signature/key/context workspace uses PSRAM.
+Deploy the updated Data/shared library before using ML-DSA enrollment or OTA.
+Existing topics and unsigned .NET operations
 (connect, wakeup, acknowledgements and alert updates) stay unchanged.
 Signing does not add replay protection to ordinary .NET-equivalent commands;
 OTA keeps its request ID, expiry and version checks.
 
 The implemented inbound command checks are explicitly different by operation:
 
-| Operations | ECDSA signature | Payload AuthKey |
+| Operations | Configured command signature | Payload AuthKey |
 | --- | --- | --- |
 | `processorAuthKey` (enrollment reply) | Required | No pre-existing AuthKey required |
 | `processorInit`, `processorQueueDic` | Required | Required |
@@ -401,7 +420,7 @@ fresh synchronization fails. Regular synchronization runs every 60 seconds;
 this also limits drift when emulator time advances slower than host time.
 This is ordinary SNTP, not authenticated time synchronization or an anti-spoofing
 mechanism. A fresh reply addresses stale synchronization; it does not prove the
-time source's identity. Command authenticity is checked separately by ECDSA.
+time source's identity. Command authenticity is checked separately by the configured signature verifier.
 No clock-skew exemption is applied to the five-minute command window. Keep
 the backend host clock synchronized too. Validation logs show device time and
 command expiry, but never AuthKey or broker credentials.

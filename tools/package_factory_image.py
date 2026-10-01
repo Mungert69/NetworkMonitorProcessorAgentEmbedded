@@ -24,8 +24,8 @@ def public_live_config(template: pathlib.Path) -> bytes:
     config = json.loads(template.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ValueError("live appsettings template must be a JSON object")
-    if config.get("AuthDevice") is not True or config.get("IsQuantumCapable") is not False:
-        raise ValueError("live template must enable OAuth enrollment and mark the device non-quantum")
+    if config.get("AuthDevice") is not True or not isinstance(config.get("IsQuantumCapable"), bool):
+        raise ValueError("live template must enable OAuth enrollment and specify its signature capability")
     if not isinstance(config.get("LoadServer"), str) or not config["LoadServer"]:
         raise ValueError("live template must have a LoadServer")
     present = {str(key).lower() for key in config}

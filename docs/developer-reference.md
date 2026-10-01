@@ -21,6 +21,7 @@ tests/dotnet/       Source-linked .NET contract oracle and fixture generator
 tests/fixtures/     Generated .NET JSON examples and boundary cases
 tests/reference/    Pre-refactor algorithms for host regression comparison only
 third_party/yyjson/ Pinned single application JSON library (Git submodule)
+third_party/wolfssl/ Pinned quantum TLS library (Git submodule, GPLv3)
 docs/               Setup guide and broker configuration examples
 runtime/            Ignored private emulator/config state (created as needed)
 ```
@@ -52,6 +53,12 @@ exercise the real ESP-IDF HTTP/TLS stack against local fault-injection servers,
 without processor credentials or a broker.
 See [monitoring parity](monitoring-parity.md) for the reference contracts,
 failure tests and deliberate embedded adaptations.
+On `feature/wolfssl-quantum-endpoints`, `quantum` and `quantumcert` use the
+[wolfSSL provider](../tests/integration/quantum/README.md). Its native and
+physical-board tests compile the production TLS module. MQTT/HTTP/OTA keep
+mbedTLS. This experimental branch is not a published release; see the licensing
+and algorithm-coverage notes before distributing combined images. The
+[licensing checklist](licensing.md) covers matching source and notices.
 
 Monitoring uses typed C records and bounded collections (`monitor_model.h`),
 not a mutable JSON document. Candidate snapshots share records until changed;
@@ -121,9 +128,11 @@ processor implementation in this repository.
 | `enrollment.c`, `enrollment_oauth.c`, `enrollment_http.c`, `enrollment_registration.c` | Enrollment sequence, device OAuth/identity, bounded HTTPS, signed broker registration |
 | `processor.c`, `processor_mqtt.c`, `processor_commands.c` | Runtime loop, MQTT callback/queue ownership, validated command dispatch |
 | `processor_messages.c`, `message_publish.c`, `processor_ota.c`, `ota.c` | Ready/status payloads, shared encoding, OTA command/job coordination, image installation |
+| `command_security.c`, `command_mldsa.c` | ES256 envelopes or .NET ML-DSA-65 objects, selected strictly by configured capability |
 | `monitor_record.c`, `monitor_snapshot.c`, `monitor_model.c` | Record ownership/JSON codec, snapshot persistence format, monitoring transitions |
 | `monitor_schedule.c` | Typed scheduling, with separate skip/counter/daily evaluation helpers |
 | `endpoints.c`, `endpoint_{dns,icmp,tcp,http}.c`, `endpoint_common.c` | Endpoint dispatch, individual probes and shared deadline/result helpers |
+| `endpoint_quantum.c`, `quantum_tls.*` | Quantum result mapping/bounded DNS; reusable verified TLS 1.3 provider and certificate diagnostics |
 
 Private `*_internal.h` headers describe module boundaries and ownership.
 The processor task owns monitoring state. MQTT transfers queued message buffers
@@ -153,7 +162,14 @@ fresh-boot test needs a new instance directory. Scripts do not install the emula
 or restore the private OTA signing key for you.
 
 Preserve the existing private OTA signing key. Configuration and enrolled runtime
-flash are private; never commit them or distribute them as OTA artifacts.
+flash are private; never commit them or distribute them as OTA artifacts. Keep
+all `.bin` firmware images, factory/OTA images, merged flash images, NVS images,
+and raw device flash dumps outside the Git working tree. Build output belongs in
+the ignored `firmware/build/` directory; stage deployment files under the
+external `~/code/securefiles/{dev,live}/firmware/` directories. Public firmware
+downloads are GitHub Release assets only when intentionally published, never
+files committed to the source repository. The `.gitignore` blocks common binary
+image extensions as an additional safeguard.
 The build reads `../securefiles/private-ota-signing-key.pem` by default; override
 with `NM_OTA_SIGNING_KEY=/absolute/path/to/key.pem`. The build script exposes it
 to ESP-IDF through a temporary permission-restricted symlink; no key is copied
@@ -162,7 +178,9 @@ into source control.
 ## Capability reporting
 
 The standard firmware supports `icmp`, `dns`, `rawconnect`, `http`, `httphtml`,
-`https`, `blebroadcast`, and `blebroadcastlisten`. Both BLE endpoints share one
+`https`, `blebroadcast`, and `blebroadcastlisten`. The quantum feature branch
+also supports `quantum` and `quantumcert` (standardized ML-KEM/ML-DSA only).
+Both BLE endpoints share one
 passive NimBLE scanner; they do not create a scanner per monitor. See the
 [BLE support notes](guide.md#ble-broadcast-monitoring) for packet filtering,
 supported options, and the bounded listen-output adaptation. BLE command

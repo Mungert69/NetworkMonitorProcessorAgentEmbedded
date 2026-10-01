@@ -126,13 +126,13 @@ bool nm_esp_config_bind(nm_esp_config *config, yyjson_mut_val *root)
         return false;
     config->is_quantum_capable = !quantum || yyjson_mut_is_true(quantum);
     if (config->wifi_setup)
-        return config->auth_device && !config->is_quantum_capable &&
+        return config->auth_device &&
                parse_uint(root, "max_monitors", 1, NM_ESP_MAX_MONITORS, &config->max_monitors) &&
                parse_uint(root, "max_pending_ping_infos", config->max_monitors, 5000,
                           &config->max_pending_ping_infos) &&
                parse_uint(root, "poll_seconds", 1, 86400, &config->poll_seconds);
     if (config->auth_device) {
-        return !config->is_quantum_capable && config->wifi_ssid && config->wifi_password &&
+        return config->wifi_ssid && config->wifi_password &&
                strlen(config->wifi_ssid) <= 32 && strlen(config->wifi_password) <= 63 &&
                parse_uint(root, "max_monitors", 1, NM_ESP_MAX_MONITORS, &config->max_monitors) &&
                parse_uint(root, "max_pending_ping_infos", config->max_monitors, 5000,

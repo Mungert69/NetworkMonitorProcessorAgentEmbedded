@@ -38,6 +38,7 @@ do not replace physical-board testing.
 | Scheduling | `ConfigurableEndpointFilterStrategy`, `NetConnectCollection.GetFilteredNetConnects` | Skip overrides, counter modes, probability boundaries, daily gates, persistence |
 | Endpoint status | `HTTPConnect`, `ICMPConnect`, `DNSConnect`, `SocketConnect`, `NetConnect.ProcessStatus` | HTTP enum names, failure statuses, ushort RTT conversion |
 | HTTP total timeout | `NetConnect` cancellation budget and `HTTPConnect` timed request | Production deadline transport unit tests, 44 real ESP-IDF HTTP/TLS fault-injection cases |
+| Quantum endpoints (feature branch) | `QuantumConnect`, `QuantumCertConnect`, `QuantumCertificateAnalyzer` | Exact status strings, signature-or-key classification, verified TLS 1.3, bounded DNS adapter; native interoperability/concurrency/allocation tests |
 | BLE broadcast/listen | `BleBroadcastConnect`, `BleBroadcastListenConnect`, `BleBroadcastCmdProcessor.IsVictronInstantReadout` | Shared passive scanner, bounded per-worker waiters, source-vector AD filter and production endpoint/AES tests, signed ESP-IDF build; physical RF/coexistence validation still required |
 
 The BLE endpoints share one NimBLE observer instead of starting a platform scan
@@ -372,6 +373,27 @@ be assumed without further evidence.
 
 ## Deliberate adaptations, not claims of bit-for-bit equivalence
 
+- The quantum feature branch offers six standardized ML-KEM/hybrid groups and
+  recognizes ML-DSA-44/65/87 leaf signatures or public keys. It does not claim
+  complete OQS/legacy algorithm coverage. Unlike the .NET ServerHello-only
+  quantum probe, `quantum` requires a completed authenticated TLS 1.3 handshake.
+  `quantumcert` follows .NET's presented-certificate classification independently
+  of CA trust, dates and hostname, using an isolated observational session. Its
+  result reports signature/public-key algorithms and the .NET summary labels.
+  Chain/date verification failures append `Certificate trust: not trusted`
+  without changing the algorithm result; contexts are private to each
+  certificate observation to isolate accepted untrusted intermediate caches.
+  This policy is never used for authenticated application traffic. It
+  avoids .NET's broad NIST OID prefix that can label classical SHA-3 signatures
+  as PQ. Certificate diagnostics retain subject, issuer, expiry and transmitted
+  chain count; display names need not match .NET platform friendly names.
+  Roots come from the build's IDF Mozilla PEM set, cached in PSRAM. One monotonic
+  budget includes provider setup, bounded DNS, TCP and TLS; cryptographic calls
+  are not preempted at the deadline. Local resource failures are inconclusive.
+  `IsQuantumCapable` now selects ML-DSA-65 command verification when true and
+  ES256 envelope verification when false. The quantum branch defaults to true.
+  This setting selects backend command signatures; it does not describe whether
+  a particular monitored server is quantum safe.
 - .NET uses a randomized per-process string hash for daily slots. The device
   uses a stable FNV-1a hash of the decimal monitor ID. Slot distribution and
   once-per-day gating are equivalent; a particular host's slot need not match.
