@@ -2,8 +2,8 @@
 
 This firmware is distributed under GPL-3.0-only for project-authored code.
 The dependencies below keep their own terms; this file does not relicense them.
-The matching source package contains the pinned source trees and the license
-texts shipped with them.
+The repository tag identifies project source and pinned Git submodules; the
+dependency lock and this notice identify the managed component sources.
 
 | Component | Exact release / source revision | License |
 |---|---|---|
@@ -20,8 +20,10 @@ consult the SBOM and the corresponding files in the pinned ESP-IDF source tree.
 The IDF source is available at
 <https://github.com/espressif/esp-idf/tree/fff9895c82d744c7237be8847347bdd1b07c6643>.
 
-The source archive includes the exact project commit, both Git submodules and
-the resolved Brotli and MQTT component source trees. Build configuration,
-dependency lock, quality-zero Brotli specialization and scripts are included.
-The private OTA signing key and provisioned device data are intentionally not
-included. See `docs/licensing.md` for release and installation information.
+For project sources, check out the release tag with
+`git clone --recurse-submodules`; the submodule commits are pinned by the
+tagged repository. Brotli and ESP-MQTT source versions and integrity hashes
+are pinned in `firmware/dependencies.lock` and can be fetched by ESP-IDF's
+component manager. The private OTA signing key and provisioned device data
+are intentionally not included. See `docs/licensing.md` for release and
+installation information.

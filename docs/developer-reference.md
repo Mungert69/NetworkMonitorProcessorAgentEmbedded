@@ -14,7 +14,6 @@ Broker permissions and backend signing setup are documented in
 ```text
 firmware/           ESP-IDF project, native code and public config templates
 tools/              Build, flash, provisioning, emulator and OTA utilities
-release-source/     Versioned corresponding-source bundles for published firmware
 tests/native/       Host tests of actual firmware headers/functions
 tests/tooling/      Offline Python and script regression tests
 tests/integration/  Explicit emulator and backend signature tests

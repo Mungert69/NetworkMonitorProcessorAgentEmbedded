@@ -9,9 +9,11 @@ automatically secure: review upstream releases and advisories regularly.
 The quantum feature branch also pins wolfSSL in `third_party/wolfssl` as a Git
 submodule. Review its upstream security updates before changing that pin, and
 run the quantum native, firmware and board tests. Its open-source license is
-GPLv3; see [licensing and release requirements](licensing.md). A matching
-firmware source release must include the exact dependency sources, not only
-the superproject's automatically generated source archive.
+GPLv3; see [licensing and release requirements](licensing.md). A firmware
+release must identify an immutable project tag, pinned submodule commits,
+managed-component lockfile and upstream ESP-IDF revision. A GitHub-generated
+source snapshot alone omits submodule contents; use a recursive clone for the
+complete project checkout.
 
 The weekly scheduled check compares yyjson's pinned release and Brotli/MQTT's
 exact manifest pins against their latest stable upstream releases. It opens one

@@ -24,17 +24,19 @@ complete corresponding source available to recipients.
 
 Before publishing a factory or OTA image:
 
-1. Publish the matching project commit and corresponding-source archive.
-   `tools/package_corresponding_source.py` packages the project, exact Git
-   submodules, checksum-verified Brotli and ESP-MQTT sources, build config,
-   scripts, dependency lock, notices and SBOM. ESP-IDF is pinned to the exact
-   upstream commit recorded in the archive manifest and fetched from that
-   immutable revision. A GitHub-generated source archive alone omits Git
-   submodule contents; do not present it as the complete source package.
-2. Include GPLv3 and the applicable third-party copyright/license notices
-   with the release. Link each binary to its matching source package and give
-   recipients the rights required by those licenses. A link to a moving branch
-   or to an unrelated newer source revision is not sufficient.
+1. Publish an immutable release tag for the exact source revision used to
+   build the firmware. For a full source checkout, use
+   `git clone --recurse-submodules` at that tag; this fetches the exact wolfSSL
+   and yyjson commits recorded by the repository. The Brotli and ESP-MQTT
+   component versions and integrity hashes are pinned in
+   `firmware/dependencies.lock` and are fetched from Espressif's component
+   registry by the documented ESP-IDF build. ESP-IDF itself is identified by
+   the exact upstream commit in `THIRD_PARTY_NOTICES.md` and the SBOM. Do not
+   present GitHub's auto-generated source snapshot as containing submodule
+   contents.
+2. Attach `THIRD_PARTY_NOTICES.md` and the matching CycloneDX SBOM to the
+   release, and link users to the immutable source tag. Keep the license and
+   dependency references tied to that firmware revision, not a moving branch.
 3. Do not include Wi-Fi credentials, OAuth tokens, enrolled flash, or the
    operator's private OTA signing key in a public source package. This build
    enables signed application images but does not enable hardware Secure Boot
@@ -44,11 +46,9 @@ Before publishing a factory or OTA image:
    not needed for that route, which erases existing device configuration.
    Recheck this installation information if hardware Secure Boot, flash
    encryption or a locked ROM-download policy is enabled in a future build.
-4. Test the source package by building from a clean checkout with its
-   dependencies, then run the normal firmware and hardware checks.
-
-The v0.3.0 source package is stored in
-`release-source/NetworkMonitorProcessorAgentEmbedded-v0.3.0-source.tar.gz`.
-Attach it and the matching `THIRD_PARTY_NOTICES.md`, SBOM and checksum file to
-the same GitHub release as the factory image. It is also committed here so
-recipients can obtain it independently of GitHub's generated source archives.
+4. Test a clean recursive checkout at the release tag with the pinned
+   dependencies, then run the normal firmware and hardware checks. The
+   `tools/package_corresponding_source.py` utility can create a local source
+   archive for recipients who specifically need one; generated archives are
+   not committed or attached to releases to avoid duplicating source already
+   available through the repository and upstream pinned dependencies.
