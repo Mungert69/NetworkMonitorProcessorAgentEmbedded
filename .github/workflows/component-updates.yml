@@ -1,4 +1,4 @@
-name: ESP component update check
+name: Firmware dependency update check
 
 on:
   schedule:
@@ -17,7 +17,7 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - name: Check pinned components against registry
+      - name: Check pinned firmware dependencies for updates
         id: check
         continue-on-error: true
         run: python3 tools/check-component-updates.py
@@ -31,7 +31,7 @@ jobs:
             --search "$title in:title" --json number --jq 'length')
           if [ "$existing" -eq 0 ]; then
             gh issue create --title "$title" \
-              --body 'The scheduled check found a newer library release or could not reach an upstream registry. Run `python3 tools/check-component-updates.py`. Update the exact pins in a pull request, regenerate the IDF lockfile if applicable, and require CI to pass before merging.' \
+              --body 'The scheduled check found a newer stable firmware dependency release or could not reach an upstream source. This includes Brotli, ESP-MQTT, yyjson, and wolfSSL. Run `python3 tools/check-component-updates.py`. Review security advisories and release notes, update the exact pin in a pull request, regenerate the IDF lockfile if applicable, and require CI to pass before merging.' \
               --repo "$GITHUB_REPOSITORY"
           fi
           exit 1

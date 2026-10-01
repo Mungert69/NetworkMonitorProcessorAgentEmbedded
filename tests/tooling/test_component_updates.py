@@ -25,6 +25,19 @@ class ComponentUpdateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MODULE.current_pin(manifest, "missing")
 
+    def test_parses_wolfssl_stable_release_tags(self):
+        self.assertEqual(MODULE.wolfssl_version_tuple("v5.9.2-stable"), (5, 9, 2))
+        self.assertEqual(MODULE.wolfssl_version_tuple("5.10.0-stable"), (5, 10, 0))
+        self.assertGreater(
+            MODULE.wolfssl_version_tuple("v5.9.10-stable"),
+            MODULE.wolfssl_version_tuple("v5.9.4-stable"),
+        )
+
+    def test_rejects_non_stable_wolfssl_tags(self):
+        for value in ("v5.9.2", "v5.9.2-staging", "v5.9.2-stable-rc1", "latest"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                MODULE.wolfssl_version_tuple(value)
+
 
 if __name__ == "__main__":
     unittest.main()

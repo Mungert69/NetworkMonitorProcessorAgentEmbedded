@@ -53,11 +53,11 @@ exercise the real ESP-IDF HTTP/TLS stack against local fault-injection servers,
 without processor credentials or a broker.
 See [monitoring parity](monitoring-parity.md) for the reference contracts,
 failure tests and deliberate embedded adaptations.
-On `feature/wolfssl-quantum-endpoints`, `quantum` and `quantumcert` use the
-[wolfSSL provider](../tests/integration/quantum/README.md). Its native and
-physical-board tests compile the production TLS module. MQTT/HTTP/OTA keep
-mbedTLS. This experimental branch is not a published release; see the licensing
-and algorithm-coverage notes before distributing combined images. The
+`quantum` and `quantumcert` use the
+[wolfSSL provider](../tests/integration/quantum/README.md), which is part of the
+released firmware. Its native and physical-board tests compile the production
+TLS module. MQTT/HTTP/OTA continue to use ESP-IDF's mbedTLS integration. See the
+licensing and algorithm-coverage notes before distributing firmware; the
 [licensing checklist](licensing.md) covers matching source and notices.
 
 Monitoring uses typed C records and bounded collections (`monitor_model.h`),
@@ -177,9 +177,9 @@ into source control.
 
 ## Capability reporting
 
-The standard firmware supports `icmp`, `dns`, `rawconnect`, `http`, `httphtml`,
-`https`, `blebroadcast`, and `blebroadcastlisten`. The quantum feature branch
-also supports `quantum` and `quantumcert` (standardized ML-KEM/ML-DSA only).
+The firmware supports `icmp`, `dns`, `rawconnect`, `http`, `httphtml`,
+`https`, `blebroadcast`, `blebroadcastlisten`, `quantum`, and `quantumcert`
+(standardized ML-KEM/ML-DSA only for the quantum endpoints).
 Both BLE endpoints share one
 passive NimBLE scanner; they do not create a scanner per monitor. See the
 [BLE support notes](guide.md#ble-broadcast-monitoring) for packet filtering,

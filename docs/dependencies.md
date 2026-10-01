@@ -6,24 +6,27 @@ records the resolved packages and integrity hashes. `third_party/yyjson` is a
 Git submodule pinned by the parent commit. Pins make builds reproducible, not
 automatically secure: review upstream releases and advisories regularly.
 
-The quantum feature branch also pins wolfSSL in `third_party/wolfssl` as a Git
-submodule. Review its upstream security updates before changing that pin, and
-run the quantum native, firmware and board tests. Its open-source license is
-GPLv3; see [licensing and release requirements](licensing.md). A firmware
-release must identify an immutable project tag, pinned submodule commits,
-managed-component lockfile and upstream ESP-IDF revision. A GitHub-generated
-source snapshot alone omits submodule contents; use a recursive clone for the
-complete project checkout.
+Firmware uses wolfSSL, pinned by the `third_party/wolfssl` Git submodule.
+The scheduled update check compares that stable release tag with wolfSSL's
+latest stable GitHub release and flags newer releases for review; it never
+changes the pin automatically. Review upstream security advisories and release
+notes before updating it, then run the quantum native, firmware and board
+tests. Its open-source license is GPLv3; see
+[licensing and release requirements](licensing.md). A firmware release must
+identify an immutable project tag, pinned submodule commits, managed-component
+lockfile and upstream ESP-IDF revision. A GitHub-generated source snapshot
+alone omits submodule contents; use a recursive clone for the complete project
+checkout.
 
-The weekly scheduled check compares yyjson's pinned release and Brotli/MQTT's
-exact manifest pins against their latest stable upstream releases. It opens one
-tracking issue when review is needed; it does not silently change a firmware
-dependency. Dependabot proposes GitHub Actions updates weekly. A git-submodule
-Dependabot updater is deliberately not used here because its tracking target
-need not be a reviewed yyjson release tag. Repository vulnerability alerts
-and automated security updates are enabled. Review ESP-IDF itself at least
-monthly and promptly after a relevant advisory; the registry checker does not
-track the toolchain.
+The weekly scheduled check compares yyjson and wolfSSL's pinned release tags,
+and Brotli/MQTT's exact manifest pins, against their latest stable upstream
+releases. It opens one tracking issue when review is needed; it does not
+silently change a firmware dependency. Dependabot proposes GitHub Actions
+updates weekly. A git-submodule Dependabot updater is deliberately not used:
+the scheduled checker can compare the actual upstream stable release tags.
+Repository vulnerability alerts and automated security updates are enabled.
+Review ESP-IDF itself at least monthly and promptly after a relevant advisory;
+the registry checker does not track the toolchain.
 
 For a managed component upgrade, change its version in
 `firmware/main/idf_component.yml`, then use the pinned IDF toolchain to run

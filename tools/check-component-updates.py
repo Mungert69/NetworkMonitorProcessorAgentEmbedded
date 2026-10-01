@@ -15,6 +15,7 @@ from urllib.request import urlopen
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "firmware/main/idf_component.yml"
 COMPONENTS = ("brotli", "mqtt")
+WOLFSSL_REPOSITORY = "wolfSSL/wolfssl"
 
 
 def version_tuple(version: str) -> tuple[int, ...]:
@@ -28,6 +29,14 @@ def current_pin(text: str, name: str) -> str:
     if not match:
         raise ValueError(f"missing exact espressif/{name} pin")
     return match.group(1)
+
+
+def wolfssl_version_tuple(tag: str) -> tuple[int, ...]:
+    """Parse only wolfSSL's stable release tags (for example v5.9.2-stable)."""
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)-stable", tag)
+    if not match:
+        raise ValueError(f"unexpected wolfSSL stable tag: {tag!r}")
+    return tuple(map(int, match.groups()))
 
 
 def main() -> int:
@@ -56,6 +65,20 @@ def main() -> int:
     print(f"yyjson: pinned={pinned_yyjson} latest={latest_yyjson}")
     if version_tuple(latest_yyjson) > version_tuple(pinned_yyjson):
         updates.append(f"- yyjson: {pinned_yyjson} → {latest_yyjson}")
+
+    pinned_wolfssl = subprocess.check_output(
+        ["git", "-C", str(ROOT / "third_party/wolfssl"), "describe", "--exact-match", "--tags"],
+        text=True,
+    ).strip()
+    pinned_wolfssl_version = wolfssl_version_tuple(pinned_wolfssl)
+    wolfssl_url = f"https://api.github.com/repos/{WOLFSSL_REPOSITORY}/releases/latest"
+    with urlopen(wolfssl_url, timeout=15) as response:
+        latest_wolfssl = json.load(response)["tag_name"]
+    latest_wolfssl_version = wolfssl_version_tuple(latest_wolfssl)
+    print(f"wolfSSL: pinned={pinned_wolfssl} latest={latest_wolfssl}")
+    if latest_wolfssl_version > pinned_wolfssl_version:
+        updates.append(f"- wolfSSL: {pinned_wolfssl} → {latest_wolfssl}")
+
     if updates:
         print("New stable component releases:\n" + "\n".join(updates))
         return 1

@@ -373,7 +373,7 @@ be assumed without further evidence.
 
 ## Deliberate adaptations, not claims of bit-for-bit equivalence
 
-- The quantum feature branch offers six standardized ML-KEM/hybrid groups and
+- The firmware offers six standardized ML-KEM/hybrid groups and
   recognizes ML-DSA-44/65/87 leaf signatures or public keys. It does not claim
   complete OQS/legacy algorithm coverage. Unlike the .NET ServerHello-only
   quantum probe, `quantum` requires a completed authenticated TLS 1.3 handshake.
