@@ -71,6 +71,9 @@ ProcessorDataObj
 runtime/
 .qwen/
 qwen-code-export-*.json
+release-source/*.tar.gz
+release-source/*.cdx.json
+release-source/SHA256SUMS-source.txt
 
 # Firmware images and device flash dumps stay outside the Git working tree.
 *.bin
