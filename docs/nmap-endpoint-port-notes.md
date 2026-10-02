@@ -131,8 +131,8 @@ therefore remains a static hint and does not identify the running software.
 - A separate test board was attached after the original board was left in
   bootloader for the swap. Test-board MAC: `14:c1:9f:42:99:90`.
 - The test board was erased and provisioned with the dev profile using the
-  protected Wi-Fi password file (the password was not printed). The signed
-  0.3.0 image was written and verified. It booted with QIO flash, detected
+  protected Wi-Fi password file (the password was not printed). A signed
+  pre-v0.4.0 image was written and verified. It booted with QIO flash, detected
   16 MiB flash/8 MiB PSRAM, connected to Wi-Fi, and started BLE scanning.
 - Device OAuth completed successfully. The dev backend registered the board
   and delivered the signed AuthKey and ProcessorInit; the firmware verified
@@ -148,7 +148,7 @@ therefore remains a static hint and does not identify the running software.
   interpretation (`endpoint_nmap.c`) and a process-like runner interface
   (`nmap_runner.h`) with the embedded socket implementation in
   `nmap_runner_embedded.c`. No real Nmap process or Nmap code is used on-device.
-- On 2026-10-02 the refactored signed 0.3.0 application (SHA-256 prefix
+- On 2026-10-02 the refactored signed pre-v0.4.0 application (SHA-256 prefix
   `3ec52e13db89`) was USB-flashed using the recovery tool, preserving bootloader,
   nmconfig and nmdata. Both assigned monitors passed two consecutive cycles:
   Nmap ID 31 (60/81 ms) and HTTP ID 39 (149/9 ms). Data saved both messages and

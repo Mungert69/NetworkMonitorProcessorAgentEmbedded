@@ -91,7 +91,7 @@ wolfSSL/OpenSSL host interoperability cases passed. The spare dev board
 including default discovery, trusted classical TLS, port ranges, invalid
 arguments, cancellation and rejected signature tampering. Ordinary monitoring
 and Data's application acknowledgements continued during these checks. The
-signed normal 0.3.0 application was flashed without replacing the bootloader
+signed pre-v0.4.0 application was flashed without replacing the bootloader
 or monitoring partition. These checks do not exercise a real frontend LLM
 session; the user performs that next, after normal capability re-registration.
 

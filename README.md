@@ -66,6 +66,6 @@ The implementation notes, build prerequisites, architecture, tests and release
 procedures are in the [developer reference](docs/developer-reference.md).
 Review [AGENTS.md](AGENTS.md) before changing firmware code.
 
-Firmware v0.3.0 is GPL-3.0-only and links GPLv3 wolfSSL. See
+The firmware is GPL-3.0-only and links GPLv3 wolfSSL. See
 [third-party notices](THIRD_PARTY_NOTICES.md) and
 [release source requirements](docs/licensing.md) before redistributing images.

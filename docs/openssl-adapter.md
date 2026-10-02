@@ -195,8 +195,9 @@ prove Wi-Fi, MQTT command delivery, memory under load or OTA of this image.
 - Production ESP-IDF firmware build passed. Signed application size:
   2,232,320 bytes, an increase of 65,536 bytes over the preceding build.
 
-The build retains version 0.3.0. No backend or .NET processor changes were
-required. It has not been staged as an OTA release.
+This validation used a pre-v0.4.0 development build. No backend or .NET
+processor changes were required for the adapter, and that build was not staged
+as an OTA release.
 
 The adapter was also flashed to the test ESP32-S3 and exercised through the
 frontend and MQTT: catalog/version, TLS 1.2/1.3, hybrid ML-KEM, standalone
