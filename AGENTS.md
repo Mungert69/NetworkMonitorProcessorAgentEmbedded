@@ -68,6 +68,10 @@ Within `firmware/main/`, put work in the following places:
 | `enrollment_oauth.c`, `enrollment_http.c` | Device authorization/identity; bounded HTTPS transport |
 | `enrollment_registration.c` | Authenticated MQTT registration and signed AuthKey response |
 | `processor.c` | Runtime loop and scheduling orchestration |
+| `processor_cmd.c`, `cmd_processor_message.*` | Single bounded command worker/replies and .NET output codec |
+| `cmd_processor_catalog.*`, `cmd_arguments.*`, `cmd_output.*` | Fixed typed dispatch, bounded CLI parsing and owned PSRAM reports; no MQTT/provider coupling |
+| `quantum_*_cmd_processor.*`, `openssl_cmd_processor.*`, `nmap_cmd_processor.*` | Six individual command policies; keep provider I/O behind typed runners |
+| `openssl_runner.*`, `nmap_runner*`, `tls_inspection.*` | Process-like TLS/TCP adapters, OpenSSL group naming and structured observations; no shell execution |
 | `processor_mqtt.c` | MQTT events, subscriptions and command-buffer enqueueing |
 | `processor_commands.c` | Route checking, signature/AuthKey gates and command delegation |
 | `nm_probe_pool.c`, `nm_probe_pool.h` | Bounded concurrent endpoint-probe executor; endpoint I/O only, never touches the model |
@@ -86,7 +90,7 @@ Within `firmware/main/`, put work in the following places:
 | `ble_scanner.c`, `ble_filter.h`, `endpoint_ble.c` | Shared passive BLE scan, bounded AD filtering, BLE endpoint probe/decoding; no model mutations in callbacks |
 | `endpoint_common.c`, `http_deadline.c` | Shared endpoint helpers; request deadline/transport lifetime |
 | `endpoint_dns_task.c` | PSRAM DNS-task creation and internal-stack completion reaper |
-| `endpoint_quantum.c`, `quantum_tls.*` | Quantum endpoint mapping/bounded resolution; reusable wolfSSL TLS provider, no model mutations |
+| `endpoint_quantum.c`, `tls_inspection.*`, `quantum_tls.*` | Endpoint status mapping; typed inspection/deadline/DNS orchestration; wolfSSL backend, no model mutations |
 
 `nm_capabilities.h` and its defaults describe supported capabilities.
 `endpoint_status.h` contains endpoint status/URL policy.

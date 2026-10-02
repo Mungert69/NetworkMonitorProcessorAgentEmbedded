@@ -8,7 +8,8 @@
 
 int main(int argc, char **argv)
 {
-    if ((argc != 5 && argc != 6) || (strcmp(argv[1], "quantum") && strcmp(argv[1], "quantumcert")))
+    if ((argc != 5 && argc != 6 && argc != 7) ||
+        (strcmp(argv[1], "quantum") && strcmp(argv[1], "quantumcert")))
         return 2;
     unsigned char *owned_pem = NULL;
     const unsigned char *pem;
@@ -49,13 +50,13 @@ int main(int argc, char **argv)
     struct addrinfo *addresses = NULL;
     int64_t start = nm_quantum_now_ms();
     /* CLI-only libc DNS. Production endpoint uses bounded nm_endpoint_resolve. */
-    if (getaddrinfo(argc == 6 ? argv[5] : argv[2], argv[3], &hints, &addresses)) {
+    if (getaddrinfo(argc >= 6 ? argv[5] : argv[2], argv[3], &hints, &addresses)) {
         nm_quantum_tls_free(provider);
         return 2;
     }
     bool certificate = !strcmp(argv[1], "quantumcert");
-    nm_quantum_result result =
-        nm_quantum_tls_probe(provider, certificate, argv[2], addresses, start + 15000);
+    nm_quantum_result result = nm_quantum_tls_probe_group(
+        provider, certificate, argv[2], addresses, start + 15000, NULL, argc == 7 ? argv[6] : NULL);
     printf("group=%s elapsed_ms=%lld outcome=%d TLS error=%d\n", result.group,
            (long long)(nm_quantum_now_ms() - start), result.outcome, result.error);
     printf("status=%s\n",

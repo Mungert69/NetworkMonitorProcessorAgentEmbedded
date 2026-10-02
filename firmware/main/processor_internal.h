@@ -31,6 +31,8 @@ typedef struct {
     unsigned subscriptions;
     unsigned poll_seconds;
     TickType_t last_resource_tick;
+    struct nm_cmd_job *cmd_job; /* Owner task; worker has only private request/result. */
+    char last_cmd_id[129];
 } processor;
 
 static inline const char *string_field(yyjson_mut_val *object, const char *name)
@@ -44,4 +46,6 @@ bool nm_processor_publish_firmware_status(processor *agent);
 void nm_processor_dispatch(processor *agent, const command *message);
 void nm_processor_mqtt_event(void *arg, esp_event_base_t base, int32_t id, void *event_data);
 bool nm_processor_start_update(processor *agent, yyjson_mut_val *data);
+bool nm_processor_cmd_dispatch(processor *, const char *, yyjson_mut_val *);
+void nm_processor_cmd_poll(processor *);
 #endif

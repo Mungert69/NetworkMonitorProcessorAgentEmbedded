@@ -45,6 +45,8 @@ created resource.
 | `processor/out/status-alerts` | `processor.out.status-alerts` | Alert: status changes |
 | `processor/out/reset-alerts` | `processor.out.reset-alerts` | Alert: reset requests |
 | `processor/out/firmware-status` | `processor.out.firmware-status` | Data: OTA health/status |
+| `processor/out/scan-ack` | `processor.out.scan-ack` | Service: command acknowledgement |
+| `processor/out/scan-ran` | `processor.out.scan-ran` | Service: command result/help/list |
 
 The registration reply is `<routing-id>/processorAuthKey`.
 OTA commands use `<routing-id>/processorFirmwareUpdate` and
@@ -73,7 +75,9 @@ var mqttScopes = [
   audience + ".write:*/monitorProcessor.mqtt.v1/processor.out.data",
   audience + ".write:*/monitorProcessor.mqtt.v1/processor.out.status-alerts",
   audience + ".write:*/monitorProcessor.mqtt.v1/processor.out.reset-alerts",
-  audience + ".write:*/monitorProcessor.mqtt.v1/processor.out.firmware-status"
+  audience + ".write:*/monitorProcessor.mqtt.v1/processor.out.firmware-status",
+  audience + ".write:*/monitorProcessor.mqtt.v1/processor.out.scan-ack",
+  audience + ".write:*/monitorProcessor.mqtt.v1/processor.out.scan-ran"
 ];
 jwt.scope_as_list = (jwt.scope_as_list || []).concat(mqttScopes);
 ```

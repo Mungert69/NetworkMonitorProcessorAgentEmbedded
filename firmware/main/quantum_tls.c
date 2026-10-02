@@ -92,7 +92,7 @@ void nm_quantum_result_free(nm_quantum_result *result)
 }
 
 /* 1 ready, 0 expired, -1 OS failure; never FD_SET an out-of-range descriptor. */
-static int wait_socket(int fd, bool read_ready, int64_t deadline)
+static int wait_socket(int fd, bool read_ready, int64_t deadline, const atomic_bool *cancellation)
 {
 #ifdef LWIP_SELECT_MAXNFDS
     const int limit = LWIP_SELECT_MAXNFDS;
@@ -104,6 +104,8 @@ static int wait_socket(int fd, bool read_ready, int64_t deadline)
         return -1;
     }
     for (;;) {
+        if (cancellation && atomic_load(cancellation))
+            return -2;
         int64_t now = nm_quantum_now_ms();
         if (now < 0) {
             errno = EIO;
@@ -112,6 +114,8 @@ static int wait_socket(int fd, bool read_ready, int64_t deadline)
         int64_t remaining = deadline - now;
         if (remaining <= 0)
             return 0;
+        if (cancellation && remaining > 100)
+            remaining = 100;
         fd_set ready;
         FD_ZERO(&ready);
         FD_SET(fd, &ready);
@@ -119,6 +123,8 @@ static int wait_socket(int fd, bool read_ready, int64_t deadline)
         int rc =
             select(fd + 1, read_ready ? &ready : NULL, read_ready ? NULL : &ready, NULL, &wait);
         if (rc < 0 && errno == EINTR)
+            continue;
+        if (!rc && cancellation)
             continue;
         return rc > 0 ? 1 : rc;
     }
@@ -241,6 +247,23 @@ static char *certificate_summary(WOLFSSL_X509 *cert, WOLFSSL *ssl, bool safe, bo
 nm_quantum_result nm_quantum_tls_probe(nm_quantum_tls *provider, bool certificate, const char *host,
                                        const struct addrinfo *addresses, int64_t deadline)
 {
+    return nm_quantum_tls_probe_cancelable(provider, certificate, host, addresses, deadline, NULL);
+}
+
+nm_quantum_result nm_quantum_tls_probe_cancelable(nm_quantum_tls *provider, bool certificate,
+                                                  const char *host,
+                                                  const struct addrinfo *addresses,
+                                                  int64_t deadline, const atomic_bool *cancellation)
+{
+    return nm_quantum_tls_probe_group(provider, certificate, host, addresses, deadline,
+                                      cancellation, NULL);
+}
+
+nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool certificate,
+                                             const char *host, const struct addrinfo *addresses,
+                                             int64_t deadline, const atomic_bool *cancellation,
+                                             const char *requested_group)
+{
     nm_quantum_result result = {.outcome = NM_QUANTUM_ERROR, .certificate_trusted = true};
     WOLFSSL_CTX *observation_context = NULL;
     WOLFSSL *ssl = NULL;
@@ -279,11 +302,51 @@ nm_quantum_result nm_quantum_tls_probe(nm_quantum_tls *provider, bool certificat
     int groups[] = {WOLFSSL_X25519MLKEM768, WOLFSSL_SECP256R1MLKEM768, WOLFSSL_SECP384R1MLKEM1024,
                     WOLFSSL_ML_KEM_512,     WOLFSSL_ML_KEM_768,        WOLFSSL_ML_KEM_1024,
                     WOLFSSL_ECC_X25519,     WOLFSSL_ECC_SECP256R1};
-    if (wolfSSL_set_groups(ssl, groups, certificate ? 8 : 6) != WOLFSSL_SUCCESS) {
+    int selected[8];
+    size_t selected_count = 0;
+    if (requested_group) {
+        static const char *const names[] = {
+            "X25519MLKEM768", "SecP256r1MLKEM768", "SecP384r1MLKEM1024",
+            "MLKEM512",       "MLKEM768",          "MLKEM1024",
+            "X25519",         "secp256r1"};
+        if (strlen(requested_group) > 511)
+            goto cleanup;
+        char copy[512];
+        memcpy(copy, requested_group, strlen(requested_group) + 1);
+        char *cursor = copy, *next;
+        do {
+            next = strchr(cursor, ':');
+            if (next)
+                *next++ = 0;
+            int id = 0;
+            for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
+                if (!strcmp(cursor, names[i]))
+                    id = groups[i];
+            if (!id || selected_count == 8) {
+                selected_count = 0;
+                break;
+            }
+            selected[selected_count++] = id;
+            cursor = next;
+        } while (cursor);
+        if (!selected_count) {
+            snprintf(result.error_message, sizeof(result.error_message),
+                     "Unsupported TLS group: %.64s", requested_group);
+            goto cleanup;
+        }
+    }
+    if (wolfSSL_set_groups(ssl, requested_group ? selected : groups,
+                           requested_group ? (int)selected_count
+                           : certificate   ? 8
+                                           : 6) != WOLFSSL_SUCCESS) {
         result.outcome = NM_QUANTUM_LOCAL_FAILURE;
         goto cleanup;
     }
     for (const struct addrinfo *a = addresses; a; a = a->ai_next) {
+        if (cancellation && atomic_load(cancellation)) {
+            result.outcome = NM_QUANTUM_CANCELLED;
+            goto cleanup;
+        }
         if (nm_quantum_now_ms() >= deadline) {
             result.outcome = NM_QUANTUM_TIMEOUT;
             goto cleanup;
@@ -313,7 +376,11 @@ nm_quantum_result nm_quantum_tls_probe(nm_quantum_tls *provider, bool certificat
         if (rc && errno != EINPROGRESS && errno != EWOULDBLOCK)
             goto next;
         if (rc) {
-            rc = wait_socket(fd, false, deadline);
+            rc = wait_socket(fd, false, deadline, cancellation);
+            if (rc == -2) {
+                result.outcome = NM_QUANTUM_CANCELLED;
+                goto cleanup;
+            }
             if (!rc) {
                 result.outcome = NM_QUANTUM_TIMEOUT;
                 goto cleanup;
@@ -342,6 +409,10 @@ nm_quantum_result nm_quantum_tls_probe(nm_quantum_tls *provider, bool certificat
     result.error = 0;
     result.socket_error = false;
     for (;;) {
+        if (cancellation && atomic_load(cancellation)) {
+            result.outcome = NM_QUANTUM_CANCELLED;
+            goto cleanup;
+        }
         if (nm_quantum_now_ms() >= deadline) {
             result.outcome = NM_QUANTUM_TIMEOUT;
             goto cleanup;
@@ -361,7 +432,11 @@ nm_quantum_result nm_quantum_tls_probe(nm_quantum_tls *provider, bool certificat
                 result.outcome = NM_QUANTUM_LOCAL_FAILURE;
             goto cleanup;
         }
-        rc = wait_socket(fd, error == WOLFSSL_ERROR_WANT_READ, deadline);
+        rc = wait_socket(fd, error == WOLFSSL_ERROR_WANT_READ, deadline, cancellation);
+        if (rc == -2) {
+            result.outcome = NM_QUANTUM_CANCELLED;
+            goto cleanup;
+        }
         if (rc <= 0) {
             result.error = rc < 0 ? errno : 0;
             result.socket_error = rc < 0;
@@ -373,6 +448,9 @@ nm_quantum_result nm_quantum_tls_probe(nm_quantum_tls *provider, bool certificat
     result.error = 0;
     result.socket_error = false;
     const char *group = group_name(ssl);
+    const char *protocol = wolfSSL_get_version(ssl), *cipher = wolfSSL_get_cipher(ssl);
+    snprintf(result.protocol, sizeof(result.protocol), "%s", protocol ? protocol : "unknown");
+    snprintf(result.cipher, sizeof(result.cipher), "%s", cipher ? cipher : "unknown");
     if (group) {
         int length = snprintf(result.group, sizeof(result.group), "%s", group);
         if (length < 0 || (size_t)length >= sizeof(result.group))

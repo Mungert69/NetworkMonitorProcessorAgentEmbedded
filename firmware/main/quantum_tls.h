@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdatomic.h>
 struct addrinfo;
 typedef struct nm_quantum_tls nm_quantum_tls;
 typedef enum {
@@ -10,7 +11,8 @@ typedef enum {
     NM_QUANTUM_NEGATIVE,
     NM_QUANTUM_TIMEOUT,
     NM_QUANTUM_ERROR,
-    NM_QUANTUM_LOCAL_FAILURE
+    NM_QUANTUM_LOCAL_FAILURE,
+    NM_QUANTUM_CANCELLED
 } nm_quantum_outcome;
 typedef struct {
     nm_quantum_outcome outcome;
@@ -19,6 +21,7 @@ typedef struct {
     bool socket_error;
     char error_message[128];
     char group[64];
+    char protocol[24], cipher[128];
     char signature_algorithm[48], key_algorithm[48];
     bool certificate_trusted;
     int signature_oid, key_oid;
@@ -39,5 +42,16 @@ void nm_quantum_tls_free(nm_quantum_tls *provider);
 nm_quantum_result nm_quantum_tls_probe(nm_quantum_tls *provider, bool certificate, const char *host,
                                        const struct addrinfo *addresses, int64_t deadline_ms);
 void nm_quantum_result_free(nm_quantum_result *result);
+nm_quantum_result nm_quantum_tls_probe_cancelable(nm_quantum_tls *provider, bool certificate,
+                                                  const char *host,
+                                                  const struct addrinfo *addresses,
+                                                  int64_t deadline_ms,
+                                                  const atomic_bool *cancellation);
+/* Optional OpenSSL-style group name. NULL preserves the endpoint defaults.
+ * Unknown/uncompiled groups fail without starting a socket. */
+nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool certificate,
+                                             const char *host, const struct addrinfo *addresses,
+                                             int64_t deadline_ms, const atomic_bool *cancellation,
+                                             const char *group);
 int64_t nm_quantum_now_ms(void);
 #endif

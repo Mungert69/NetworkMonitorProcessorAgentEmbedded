@@ -38,7 +38,9 @@ do not replace physical-board testing.
 | Scheduling | `ConfigurableEndpointFilterStrategy`, `NetConnectCollection.GetFilteredNetConnects` | Skip overrides, counter modes, probability boundaries, daily gates, persistence |
 | Endpoint status | `HTTPConnect`, `ICMPConnect`, `DNSConnect`, `SocketConnect`, `NetConnect.ProcessStatus` | HTTP enum names, failure statuses, ushort RTT conversion |
 | HTTP total timeout | `NetConnect` cancellation budget and `HTTPConnect` timed request | Production deadline transport unit tests, 44 real ESP-IDF HTTP/TLS fault-injection cases |
-| Quantum endpoints (feature branch) | `QuantumConnect`, `QuantumCertConnect`, `QuantumCertificateAnalyzer` | Exact status strings, signature-or-key classification, verified TLS 1.3, bounded DNS adapter; native interoperability/concurrency/allocation tests |
+| Quantum endpoints | `QuantumConnect`, `QuantumCertConnect`, `QuantumCertificateAnalyzer` | Exact status strings, signature-or-key classification, verified TLS 1.3, bounded DNS adapter; native interoperability/concurrency/allocation tests |
+| Nmap service endpoint | `NmapCmdConnect` with `-sV` | Endpoint constructs a bounded argv and invokes a process-like embedded runner; configured port or small common-port list, bounded report and local-resource failure semantics. It is an embedded adaptation, not full Nmap output/service fingerprint parity; `nmapvuln` remains unsupported. |
+| Command processors | `QuantumCert`, `QuantumConnect`, `QuantumPortScanner`, `QuantumInfo`, `Openssl`, `Nmap` | Typed command policies and shared process-like runners; .NET naming/metadata drift checks, sanitizer-enabled worker/parser/codec tests, real TLS interoperability and signed MQTT board tests. See [scope and adaptations](command-processor-port-notes.md); arbitrary OpenSSL/Nmap CLI parity is not claimed. |
 | BLE broadcast/listen | `BleBroadcastConnect`, `BleBroadcastListenConnect`, `BleBroadcastCmdProcessor.IsVictronInstantReadout` | Shared passive scanner, bounded per-worker waiters, source-vector AD filter and production endpoint/AES tests, signed ESP-IDF build; physical RF/coexistence validation still required |
 
 The BLE endpoints share one NimBLE observer instead of starting a platform scan
@@ -372,6 +374,13 @@ core reads PSRAM. Neither an emulator defect nor a firmware defect should
 be assumed without further evidence.
 
 ## Deliberate adaptations, not claims of bit-for-bit equivalence
+
+Endpoint execution boundaries preserve these adaptations. Both quantum endpoint
+modes call `tls_inspection.*` for bounded DNS, provider setup and the shared
+deadline; `quantum_tls.c` alone implements wolfSSL session/certificate operations.
+`endpoint_quantum.c` maps the typed observation into existing .NET-derived
+statuses and transfers owned certificate diagnostics. No OpenSSL output parsing,
+new tasks, weaker trust policy or messaging changes are introduced.
 
 - The firmware offers six standardized ML-KEM/hybrid groups and
   recognizes ML-DSA-44/65/87 leaf signatures or public keys. It does not claim

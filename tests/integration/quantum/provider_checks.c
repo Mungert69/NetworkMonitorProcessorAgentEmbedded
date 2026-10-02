@@ -7,26 +7,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef struct {
     nm_quantum_tls *provider;
     const struct addrinfo *addresses;
     const char *host;
-    bool certificate, timeout;
+    bool certificate, timeout, cancel;
     unsigned repeats, failed;
 } job;
+static atomic_bool cancellation;
+static void *cancel_after_delay(void *unused)
+{
+    (void)unused;
+    struct timespec delay = {.tv_nsec = 100000000};
+    nanosleep(&delay, NULL);
+    atomic_store(&cancellation, true);
+    return NULL;
+}
 static void *run(void *argument)
 {
     job *j = argument;
     for (unsigned i = 0; i < j->repeats; ++i) {
         int64_t start = nm_quantum_now_ms();
-        nm_quantum_result r = nm_quantum_tls_probe(
-            j->provider, j->certificate, j->host, j->addresses, start + (j->timeout ? 100 : 15000));
-        if (r.outcome != (j->timeout ? NM_QUANTUM_TIMEOUT : NM_QUANTUM_OK))
+        nm_quantum_result r = j->cancel
+            ? nm_quantum_tls_probe_cancelable(j->provider, true, j->host, j->addresses,
+                                               start + 15000, &cancellation)
+            : nm_quantum_tls_probe(j->provider, j->certificate, j->host, j->addresses,
+                                    start + (j->timeout ? 100 : 15000));
+        if (r.outcome != (j->cancel ? NM_QUANTUM_CANCELLED : j->timeout ? NM_QUANTUM_TIMEOUT : NM_QUANTUM_OK))
             ++j->failed;
         if (r.outcome == NM_QUANTUM_OK && r.error)
             ++j->failed;
-        if (j->timeout && nm_quantum_now_ms() - start > 500)
+        if ((j->timeout || j->cancel) && nm_quantum_now_ms() - start > 500)
             ++j->failed;
         nm_quantum_result_free(&r);
         assert(!r.summary);
@@ -89,6 +102,10 @@ int main(int argc, char **argv)
         return 0;
     }
     pthread_t threads[8];
+    pthread_t canceller;
+    bool cancel = !strcmp(argv[1], "cancel");
+    atomic_init(&cancellation, false);
+    if (cancel) assert(!pthread_create(&canceller, NULL, cancel_after_delay, NULL));
     job jobs[8];
     size_t started = 0;
     for (; started < count; ++started) {
@@ -97,6 +114,7 @@ int main(int argc, char **argv)
                               .host = argv[2],
                               .certificate = !strcmp(argv[1], "quantumcert"),
                               .timeout = !strcmp(argv[1], "timeout"),
+                              .cancel = cancel,
                               .repeats = (unsigned)repeats};
         if (pthread_create(&threads[started], NULL, run, &jobs[started]))
             break;
@@ -106,6 +124,7 @@ int main(int argc, char **argv)
         pthread_join(threads[i], NULL);
         failures += jobs[i].failed;
     }
+    if (cancel) assert(!pthread_join(canceller, NULL));
     freeaddrinfo(addresses);
     nm_quantum_tls_free(provider);
     printf("PROVIDER_CHECKS workers=%lu repeats=%lu failures=%u\n", count, repeats, failures);

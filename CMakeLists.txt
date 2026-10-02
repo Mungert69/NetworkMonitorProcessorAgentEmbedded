@@ -139,7 +139,13 @@ target_compile_definitions(test_endpoint_execution PRIVATE _POSIX_C_SOURCE=20080
 target_compile_options(test_endpoint_execution PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 target_link_libraries(test_endpoint_execution PRIVATE yyjson m Threads::Threads)
 add_test(NAME native-endpoint_execution COMMAND test_endpoint_execution)
-add_executable(test_endpoint_quantum tests/native/test_endpoint_quantum.c firmware/main/endpoint_quantum.c)
+add_executable(test_nmap_arp tests/native/test_nmap_arp.c firmware/main/nmap_arp.c)
+target_include_directories(test_nmap_arp PRIVATE tests/native/arp_stubs
+  tests/native/endpoint_stubs firmware/main third_party/yyjson/src)
+target_compile_definitions(test_nmap_arp PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_options(test_nmap_arp PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+add_test(NAME native-nmap_arp COMMAND test_nmap_arp)
+add_executable(test_endpoint_quantum tests/native/test_endpoint_quantum.c firmware/main/endpoint_quantum.c firmware/main/tls_inspection.c)
 target_include_directories(test_endpoint_quantum PRIVATE tests/native/endpoint_stubs firmware/main third_party/yyjson/src)
 target_compile_definitions(test_endpoint_quantum PRIVATE _POSIX_C_SOURCE=200809L asm=__asm__)
 target_compile_options(test_endpoint_quantum PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
@@ -164,6 +170,19 @@ target_compile_definitions(test_processor_commands PRIVATE asm=__asm__)
 target_compile_options(test_processor_commands PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 target_link_libraries(test_processor_commands PRIVATE yyjson)
 add_test(NAME native-processor_commands COMMAND test_processor_commands)
+add_executable(test_quantum_cert_cmd tests/native/test_quantum_cert_cmd.c
+    firmware/main/quantum_cert_cmd_processor.c firmware/main/cmd_processor_message.c
+    firmware/main/quantum_connect_cmd_processor.c firmware/main/openssl_runner.c firmware/main/cmd_arguments.c
+    firmware/main/cmd_processor_catalog.c firmware/main/cmd_output.c
+    firmware/main/quantum_port_scanner_cmd_processor.c firmware/main/quantum_info_cmd_processor.c
+    firmware/main/openssl_cmd_processor.c firmware/main/nmap_cmd_processor.c firmware/main/nmap_targets.c
+    firmware/main/processor_cmd.c)
+target_include_directories(test_quantum_cert_cmd PRIVATE tests/native/cmd_stubs tests/stubs firmware/main)
+target_compile_definitions(test_quantum_cert_cmd PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_options(test_quantum_cert_cmd PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+target_link_libraries(test_quantum_cert_cmd PRIVATE yyjson Threads::Threads)
+add_test(NAME native-quantum_cert_cmd COMMAND test_quantum_cert_cmd)
+set_tests_properties(native-quantum_cert_cmd PROPERTIES TIMEOUT 15)
 add_test(NAME tooling COMMAND ${Python3_EXECUTABLE} -m unittest discover
   -s ${CMAKE_CURRENT_SOURCE_DIR}/tests/tooling -p test_*.py)
 # Firmware is built separately with tools/build-firmware.sh (ESP-IDF).

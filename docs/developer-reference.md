@@ -127,12 +127,26 @@ processor implementation in this repository.
 | `config.c`, `config_reset.c`, `network.c` | Config persistence/binding, durable serial resets, Wi-Fi/time |
 | `enrollment.c`, `enrollment_oauth.c`, `enrollment_http.c`, `enrollment_registration.c` | Enrollment sequence, device OAuth/identity, bounded HTTPS, signed broker registration |
 | `processor.c`, `processor_mqtt.c`, `processor_commands.c` | Runtime loop, MQTT callback/queue ownership, validated command dispatch |
+| `processor_cmd.c`, `cmd_processor_message.*` | Bounded command worker/replies and .NET output codec |
+| `cmd_processor_catalog.*`, `cmd_arguments.*`, `cmd_output.*` | Fixed typed command dispatch, bounded CLI parsing and owned PSRAM output |
+| `quantum_*_cmd_processor.*`, `openssl_cmd_processor.*`, `nmap_cmd_processor.*` | Individual command policies; keep transport and provider handles out of these interfaces |
+| `openssl_runner.*`, `nmap_runner*`, `tls_inspection.*` | Typed process-like OpenSSL/wolfSSL and TCP scanner adapters |
 | `processor_messages.c`, `message_publish.c`, `processor_ota.c`, `ota.c` | Ready/status payloads, shared encoding, OTA command/job coordination, image installation |
 | `command_security.c`, `command_mldsa.c` | ES256 envelopes or .NET ML-DSA-65 objects, selected strictly by configured capability |
 | `monitor_record.c`, `monitor_snapshot.c`, `monitor_model.c` | Record ownership/JSON codec, snapshot persistence format, monitoring transitions |
 | `monitor_schedule.c` | Typed scheduling, with separate skip/counter/daily evaluation helpers |
 | `endpoints.c`, `endpoint_{dns,icmp,tcp,http}.c`, `endpoint_common.c` | Endpoint dispatch, individual probes and shared deadline/result helpers |
-| `endpoint_quantum.c`, `quantum_tls.*` | Quantum result mapping/bounded DNS; reusable verified TLS 1.3 provider and certificate diagnostics |
+| `endpoint_quantum.c`, `tls_inspection.*`, `quantum_tls.*` | Quantum result mapping; typed TLS inspection/deadline/DNS execution; wolfSSL provider and certificate diagnostics |
+
+Endpoints use natural execution boundaries, not a universal command emulator.
+Nmap uses its argv/result runner; quantum endpoints share the typed
+`tls_inspection.h` request/result interface. The endpoint maps observations to
+.NET statuses; inspection owns bounded resolution, shared trust setup and the
+deadline; `quantum_tls.c` contains wolfSSL-specific socket/TLS/certificate work.
+HTTP retains its deadline transport and BLE its shared scanner. DNS/ICMP/TCP
+retain their narrow platform helpers. None of these layers introduces another
+task, shell, IPC protocol or OpenSSL command-line parser. Certificate observation
+remains separate from authenticated TLS; MQTT/HTTP/OTA TLS is unchanged.
 
 Private `*_internal.h` headers describe module boundaries and ownership.
 The processor task owns monitoring state. MQTT transfers queued message buffers
@@ -179,14 +193,25 @@ into source control.
 
 The firmware supports `icmp`, `dns`, `rawconnect`, `http`, `httphtml`,
 `https`, `blebroadcast`, `blebroadcastlisten`, `quantum`, and `quantumcert`
-(standardized ML-KEM/ML-DSA only for the quantum endpoints).
+(standardized ML-KEM/ML-DSA only for the quantum endpoints), plus a bounded
+project-owned `nmap` TCP service scan. The ESP32 `nmap` adaptation scans the
+configured TCP port, or a small built-in common-port list when Port is zero;
+the endpoint builds a bounded Nmap-style argv and calls an embedded runner
+adapter, rather than spawning a process. The runner interface is deliberately
+process-like so another platform could execute a real binary behind it. This
+repo does not include Nmap code/data and does not support `nmapvuln`.
 Both BLE endpoints share one
 passive NimBLE scanner; they do not create a scanner per monitor. See the
 [BLE support notes](guide.md#ble-broadcast-monitoring) for packet filtering,
 supported options, and the bounded listen-output adaptation. BLE command
-processors remain unsupported.
+processors remain unsupported. Supported command types are `QuantumCert`,
+`QuantumConnect`, `QuantumPortScanner`, `QuantumInfo`, `Openssl` and `Nmap`.
+Command policy, typed process-like runner and provider layers are separate;
+OpenSSL/Nmap support is a documented subset, not arbitrary binary execution.
+See [command implementation notes](command-processor-port-notes.md)
+for bounded admission, cancellation, replies and parity adaptations.
 Dev/live appsettings templates list unsupported endpoints in
-`DisabledEndpointTypes` and all current built-in commands in `DisabledCommands`.
+`DisabledEndpointTypes` and unsupported built-in commands in `DisabledCommands`.
 Registration sends the existing .NET wire fields `DisabledEndPointTypes` and
 `DisabledCommands`. Compiled defaults prevent omitted/empty lists from advertising
 unimplemented features; extra configured restrictions are merged into those lists.

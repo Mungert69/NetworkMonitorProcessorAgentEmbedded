@@ -1,0 +1,2 @@
+#define MALLOC_CAP_SPIRAM 4u
+#define MALLOC_CAP_8BIT 2u

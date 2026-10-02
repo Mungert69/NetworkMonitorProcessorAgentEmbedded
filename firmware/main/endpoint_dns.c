@@ -45,14 +45,28 @@ static void dns_worker(void *arg)
 lookup_result nm_endpoint_resolve(const char *host, unsigned port, unsigned timeout,
                                   struct addrinfo **addresses)
 {
+    return nm_endpoint_resolve_cancelable(host, port, timeout, addresses, NULL);
+}
+
+lookup_result nm_endpoint_resolve_cancelable(const char *host, unsigned port, unsigned timeout,
+    struct addrinfo **addresses, const atomic_bool *cancellation)
+{
     *addresses = NULL;
-    if (port > 65535)
+    if (!host || strlen(host) > 1024 || port > 65535)
         return LOOKUP_ERROR;
     if (!timeout)
         return LOOKUP_TIMEOUT;
     int64_t start = esp_timer_get_time();
-    if (!nm_endpoint_wait_slot(start, timeout))
-        return LOOKUP_BUSY;
+    if (!cancellation) {
+        if (!nm_endpoint_wait_slot(start, timeout)) return LOOKUP_BUSY;
+    } else {
+        for (;;) {
+            if (atomic_load(cancellation)) return LOOKUP_CANCELLED;
+            unsigned remaining = nm_endpoint_remaining(start, timeout);
+            if (!remaining) return LOOKUP_BUSY;
+            if (nm_endpoint_wait_slot(esp_timer_get_time(), remaining > 100 ? 100 : remaining)) break;
+        }
+    }
     dns_context *context = nm_bulk_calloc(1, sizeof(*context));
     if (!context) {
         nm_endpoint_release_slot();
@@ -76,7 +90,18 @@ lookup_result nm_endpoint_resolve(const char *host, unsigned port, unsigned time
     }
     unsigned budget = nm_endpoint_remaining(start, timeout);
     lookup_result result = LOOKUP_TIMEOUT;
-    if (budget && xSemaphoreTake(context->done, nm_endpoint_wait_ticks(budget)) == pdTRUE) {
+    bool completed = false;
+    while (budget) {
+        if (cancellation && atomic_load(cancellation)) { result = LOOKUP_CANCELLED; break; }
+        unsigned slice = cancellation && budget > 100 ? 100 : budget;
+        if (xSemaphoreTake(context->done, nm_endpoint_wait_ticks(slice)) == pdTRUE) {
+            completed = true;
+            break;
+        }
+        if (!cancellation) break;
+        budget = nm_endpoint_remaining(start, timeout);
+    }
+    if (completed) {
         result = context->error ? LOOKUP_ERROR : context->addresses ? LOOKUP_OK : LOOKUP_EMPTY;
         if (context->error == EAI_MEMORY)
             result = LOOKUP_NO_MEMORY;

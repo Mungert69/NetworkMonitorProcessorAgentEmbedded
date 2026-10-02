@@ -64,6 +64,10 @@ void nm_processor_dispatch(processor *agent, const command *message)
             accepted = true;
         }
     } else if (yyjson_mut_is_obj(data) && key_matches(agent, data) &&
+               (!strcmp(operation, "processorCommand") || !strcmp(operation, "cancelCommand") ||
+                !strcmp(operation, "getCmdProcessorHelp") || !strcmp(operation, "getCmdProcessorList"))) {
+        accepted = nm_processor_cmd_dispatch(agent, operation, data);
+    } else if (yyjson_mut_is_obj(data) && key_matches(agent, data) &&
                !strcmp(operation, "processorInit")) {
         accepted = nm_esp_state_init(agent->state, agent->config, data);
         if (accepted)

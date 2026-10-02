@@ -24,6 +24,8 @@ bool nm_command_requires_signature(const char *operation)
 {
     return !strcmp(operation, "processorInit") || !strcmp(operation, "processorQueueDic") ||
            !strcmp(operation, "processorFirmwareUpdate") ||
+           !strcmp(operation, "processorCommand") || !strcmp(operation, "cancelCommand") ||
+           !strcmp(operation, "getCmdProcessorHelp") || !strcmp(operation, "getCmdProcessorList") ||
            !strcmp(operation, "processorFirmwareHealthAck");
 }
 yyjson_mut_doc *nm_command_verify(yyjson_mut_val *data, const char *operation, const char *target,
@@ -62,6 +64,11 @@ static bool called(const char *operation, yyjson_mut_val *data)
     ++calls;
     memcpy(last_operation, operation, strlen(operation) + 1);
     return operation_ok;
+}
+bool nm_processor_cmd_dispatch(processor *agent, const char *operation, yyjson_mut_val *data)
+{
+    assert(agent);
+    return called(operation, data);
 }
 bool nm_esp_state_init(nm_esp_state *s, const nm_esp_config *c, yyjson_mut_val *data)
 {
@@ -116,8 +123,9 @@ int main(void)
     processor agent = {.config = &config, .poll_seconds = 60};
     const char *object = "{\"data\":{\"AuthKey\":\"test-key\",\"MonitorIPs\":[]}}";
     const char *protected_ops[] = {"processorInit", "processorQueueDic", "processorFirmwareUpdate",
-                                   "processorFirmwareHealthAck"};
-    for (size_t i = 0; i < 4; ++i) {
+                                   "processorFirmwareHealthAck", "processorCommand", "cancelCommand",
+                                   "getCmdProcessorHelp", "getCmdProcessorList"};
+    for (size_t i = 0; i < sizeof(protected_ops) / sizeof(protected_ops[0]); ++i) {
         unsigned before = calls, checks = verified;
         send(&agent, "other-route", protected_ops[i], object);
         assert(calls == before && verified == checks);
@@ -163,7 +171,7 @@ int main(void)
     send(&agent, "owned-route", "processorAlertFlag", "{\"data\":{}}");
     assert(calls == before);
     config.is_quantum_capable = true;
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < sizeof(protected_ops) / sizeof(protected_ops[0]); ++i) {
         before = calls;
         valid_signature = false;
         send(&agent, "owned-route", protected_ops[i], object);

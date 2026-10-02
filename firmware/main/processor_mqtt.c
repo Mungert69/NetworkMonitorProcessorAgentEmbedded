@@ -9,7 +9,8 @@ static const char *operations[] = {
     "processorInit",           "processorConnect",          "processorQueueDic",
     "processorWakeUp",         "removePingInfos",           "processorAlertFlag",
     "processorAlertSent",      "processorResetAlerts",      "processorUserEvent",
-    "processorFirmwareUpdate", "processorFirmwareHealthAck"};
+    "processorFirmwareUpdate", "processorFirmwareHealthAck", "processorCommand",
+    "cancelCommand", "getCmdProcessorHelp", "getCmdProcessorList"};
 
 void nm_processor_mqtt_event(void *arg, esp_event_base_t base, int32_t id, void *event_data)
 {

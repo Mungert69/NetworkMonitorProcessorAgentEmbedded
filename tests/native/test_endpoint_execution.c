@@ -36,6 +36,9 @@ int test_close(int);
 #include "../../firmware/main/endpoint_dns.c"
 #include "../../firmware/main/endpoint_icmp.c"
 #include "../../firmware/main/endpoint_tcp.c"
+#include "../../firmware/main/endpoint_nmap.c"
+#include "../../firmware/main/nmap_runner_embedded.c"
+#include "../../firmware/main/nmap_targets.c"
 #include "../../firmware/main/endpoint_http.c"
 #include "../../firmware/main/endpoints.c"
 #include <assert.h>
@@ -86,18 +89,39 @@ static unsigned semaphores, address_lists, sockets, http_clients, ping_sessions;
 static bool dns_complete = true, ping_complete = true, dns_empty, dns_error;
 static bool dns_memory_error;
 static int socket_resource_error;
+static int connect_resource_error, socket_option_error;
+static atomic_bool *cancel_after_wait;
 static bool task_error, semaphore_error, ping_new_error, ping_start_error;
 static bool ipv6_first, http_init_error, ping_reply = true;
 static int http_status = 200, http_error, http_errno;
 static int64_t http_length = 12;
 static char http_url[1200];
 static int socket_family, connect_mode;
+static bool nmap_test_mode;
+static uint16_t nmap_open_port;
+static unsigned nmap_connects;
+static nm_nmap_arp_state arp_state = NM_ARP_OFF_LINK;
+static unsigned arp_probes;
+nm_nmap_arp_result nm_nmap_arp_probe(uint32_t ipv4, unsigned timeout_ms,
+                                     const atomic_bool *cancellation)
+{
+    (void)ipv4;
+    (void)timeout_ms;
+    ++arp_probes;
+    return (nm_nmap_arp_result){
+        .state = cancellation && atomic_load(cancellation) ? NM_ARP_CANCELLED : arp_state,
+        .mac = {2, 3, 4, 5, 6, 7}};
+}
 static unsigned select_calls;
 static const nm_monitor_record *ble_monitor_seen;
 static unsigned ble_timeout_seen;
-nm_esp_result nm_endpoint_check_quantum(const char *host, const char *type, unsigned port, unsigned timeout)
+nm_esp_result nm_endpoint_check_quantum(const char *host, const char *type, unsigned port,
+                                        unsigned timeout)
 {
-    (void)host; (void)type; (void)port; (void)timeout;
+    (void)host;
+    (void)type;
+    (void)port;
+    (void)timeout;
     return (nm_esp_result){.ok = true};
 }
 nm_esp_result nm_endpoint_check_ble(const nm_monitor_record *monitor, unsigned timeout)
@@ -134,6 +158,8 @@ static void (*on_delay)(void);
 void vTaskDelay(TickType_t ticks)
 {
     now_us += (int64_t)ticks * 1000;
+    if (cancel_after_wait)
+        atomic_store(cancel_after_wait, true);
     if (on_delay)
         on_delay();
 }
@@ -220,6 +246,8 @@ int xSemaphoreTake(SemaphoreHandle_t semaphore, TickType_t ticks)
         return pdTRUE;
     }
     now_us += (int64_t)ticks * 1000;
+    if (cancel_after_wait)
+        atomic_store(cancel_after_wait, true);
     return 0;
 }
 static struct addrinfo *make_address(int family)
@@ -246,7 +274,11 @@ int test_getaddrinfo(const char *host, const char *service, const struct addrinf
                      struct addrinfo **out)
 {
     assert(strcmp(host, "host.test") == 0); /* checks copied input after timeout */
-    assert(!service || strcmp(service, "443") == 0);
+    if (service) {
+        char *end = NULL;
+        long port = strtol(service, &end, 10);
+        assert(end && !*end && port > 0 && port <= UINT16_MAX);
+    }
     assert(hints->ai_family == AF_UNSPEC);
     now_us += 5000;
     if (dns_memory_error)
@@ -341,6 +373,21 @@ int test_connect(int fd, const struct sockaddr *address, socklen_t length)
 {
     (void)length;
     assert(fd == 3 && address->sa_family == socket_family);
+    if (connect_resource_error) {
+        errno = connect_resource_error;
+        return -1;
+    }
+    if (nmap_test_mode) {
+        uint16_t port = socket_family == AF_INET
+                            ? ntohs(((const struct sockaddr_in *)address)->sin_port)
+                            : ntohs(((const struct sockaddr_in6 *)address)->sin6_port);
+        ++nmap_connects;
+        now_us += 7000;
+        if (nmap_open_port && port == nmap_open_port)
+            return 0;
+        errno = ECONNREFUSED;
+        return -1;
+    }
     now_us += 7000;
     if (connect_mode == TCP_REFUSED ||
         (connect_mode == TCP_IPV6_FALLBACK && socket_family == AF_INET6)) {
@@ -361,6 +408,8 @@ int test_select(int n, fd_set *r, fd_set *w, fd_set *e, struct timeval *timeout)
     ++select_calls;
     if (connect_mode == TCP_TIMEOUT) {
         now_us += timeout->tv_sec * INT64_C(1000000) + timeout->tv_usec;
+        if (cancel_after_wait)
+            atomic_store(cancel_after_wait, true);
         return 0;
     }
     return 1;
@@ -368,6 +417,10 @@ int test_select(int n, fd_set *r, fd_set *w, fd_set *e, struct timeval *timeout)
 int test_getsockopt(int fd, int level, int option, void *value, socklen_t *length)
 {
     assert(fd == 3 && level == SOL_SOCKET && option == SO_ERROR && *length == sizeof(int));
+    if (socket_option_error) {
+        errno = socket_option_error;
+        return -1;
+    }
     *(int *)value = 0;
     return 0;
 }
@@ -678,6 +731,264 @@ static void strict_numbers(void)
     assert(!result.ok);
     clean();
 }
+
+static void nmap_endpoint(void)
+{
+    assert(nm_esp_endpoint_supported("nmap"));
+    assert(!nm_esp_endpoint_supported("nmapvuln"));
+    nm_monitor_record monitor = {
+        .Address = "https://host.test/status", .EndPointType = "nmap", .Port = 443, .Timeout = 100};
+    nmap_test_mode = true;
+    nmap_open_port = 443;
+    nmap_connects = 0;
+    nm_esp_result result = nm_esp_endpoint_run(&monitor);
+    assert(result.ok && !strcmp(result.status, "Port/s open"));
+    assert(result.detail_message && strstr(result.detail_message, "443/tcp open"));
+    assert(strstr(result.detail_message, "Host is up"));
+    assert(nmap_connects == 1);
+    nm_esp_result_release(&result);
+    clean();
+
+    monitor.Port = 0;
+    nmap_open_port = 80;
+    nmap_connects = 0;
+    result = nm_esp_endpoint_run(&monitor);
+    assert(result.ok && !strcmp(result.status, "Port/s open"));
+    assert(result.detail_message && strstr(result.detail_message, "80/tcp open"));
+    assert(nmap_connects == 22);
+    nm_esp_result_release(&result);
+    clean();
+
+    nm_nmap_scan_request fast_scan = {.host = "host.test", .timeout_ms = 10000, .fast_scan = true};
+    nmap_connects = 0;
+    nm_nmap_run_result fast_result = nm_nmap_runner_scan(&fast_scan);
+    assert(fast_result.state == NM_NMAP_RUN_COMPLETED && nmap_connects == 8);
+    nm_nmap_runner_result_release(&fast_result);
+    clean();
+
+    const uint16_t reason_port = 443;
+    nm_nmap_scan_request detailed_scan = {.host = "host.test",
+                                          .ports = &reason_port,
+                                          .count = 1,
+                                          .timeout_ms = 1000,
+                                          .show_reason = true,
+                                          .verbosity = 2};
+    nmap_open_port = reason_port;
+    nm_nmap_run_result detailed_result = nm_nmap_runner_scan(&detailed_scan);
+    assert(detailed_result.state == NM_NMAP_RUN_COMPLETED);
+    assert(strstr(detailed_result.standard_output, "REASON"));
+    assert(strstr(detailed_result.standard_output, "connect"));
+    assert(strstr(detailed_result.standard_output, "Scanned 1 TCP ports"));
+    nm_nmap_runner_result_release(&detailed_result);
+    clean();
+
+    monitor.Port = 1883;
+    nmap_open_port = 0;
+    nmap_connects = 0;
+    result = nm_esp_endpoint_run(&monitor);
+    assert(result.ok && strstr(result.detail_message, "Host is up"));
+    assert(strstr(result.detail_message, "1883/tcp closed"));
+    assert(nmap_connects == 1);
+    nm_esp_result_release(&result);
+    clean();
+
+    const uint16_t filtered_port = 1883;
+    nm_nmap_scan_request open_only = {.host = "host.test",
+                                      .ports = &filtered_port,
+                                      .count = 1,
+                                      .timeout_ms = 1000,
+                                      .show_open = true};
+    nm_nmap_run_result open_only_result = nm_nmap_runner_scan(&open_only);
+    assert(open_only_result.state == NM_NMAP_RUN_COMPLETED);
+    assert(strstr(open_only_result.standard_output, "Host is up"));
+    assert(!strstr(open_only_result.standard_output, "PORT     STATE"));
+    nm_nmap_runner_result_release(&open_only_result);
+    clean();
+
+    /* The process-like adapter accepts only the command shape this endpoint
+     * constructs; arbitrary flags (including vuln scripts) cannot be injected. */
+    const char *unsupported_args[] = {"nmap", "--script", "vuln", "host.test"};
+    unsigned connects_before_unsupported = nmap_connects;
+    nm_nmap_run_result rejected = nm_nmap_runner_execute(unsupported_args, 4, 100);
+    assert(rejected.state == NM_NMAP_RUN_ERROR);
+    assert(nmap_connects == connects_before_unsupported);
+    nm_nmap_runner_result_release(&rejected);
+
+    socket_resource_error = EMFILE;
+    result = nm_esp_endpoint_run(&monitor);
+    assert(result.disposition == NM_PROBE_LOCAL_FAILURE);
+    socket_resource_error = 0;
+    clean();
+
+    monitor.Address = "http://user:secret@host.test/path";
+    result = nm_esp_endpoint_run(&monitor);
+    assert(!result.ok && !strcmp(result.status, "Exception"));
+    const char *invalid_targets[] = {"https://[::1]junk",   "https://[::1]:abc",
+                                     "https://[::1]:65536", "http://host.test:0",
+                                     "host.test]",          "host.test:9999999999999999999"};
+    for (size_t i = 0; i < sizeof(invalid_targets) / sizeof(*invalid_targets); ++i) {
+        result = nm_endpoint_check_nmap(invalid_targets[i], 443, 100);
+        assert(!result.ok && !strcmp(result.status, "Exception"));
+        clean();
+    }
+    monitor.Address = "HTTPS://host.test/path";
+    result = nm_esp_endpoint_run(&monitor);
+    assert(result.ok);
+    nm_esp_result_release(&result);
+    nmap_test_mode = false;
+    clean();
+}
+static void nmap_tcp_failures(void)
+{
+    const uint16_t ports[] = {80, 443};
+    nm_nmap_scan_request request = {.host = "host.test",
+                                    .ports = ports,
+                                    .count = 2,
+                                    .timeout_ms = 2000,
+                                    .no_ping = true,
+                                    .show_reason = true};
+    connect_resource_error = ENOBUFS;
+    nm_nmap_run_result result = nm_nmap_runner_scan(&request);
+    assert(result.state == NM_NMAP_RUN_LOCAL_FAILURE);
+    nm_nmap_runner_result_release(&result);
+    connect_resource_error = 0;
+    clean();
+
+    connect_mode = TCP_PENDING;
+    socket_option_error = ENOMEM;
+    result = nm_nmap_runner_scan(&request);
+    assert(result.state == NM_NMAP_RUN_LOCAL_FAILURE);
+    nm_nmap_runner_result_release(&result);
+    socket_option_error = 0;
+    clean();
+
+    connect_mode = TCP_TIMEOUT;
+    ipv6_first = true;
+    unsigned before = (unsigned)(now_us / 1000);
+    result = nm_nmap_runner_scan(&request);
+    assert(result.state == NM_NMAP_RUN_COMPLETED);
+    assert((unsigned)(now_us / 1000) - before <= 530); /* one budget per port, not per IP */
+    assert(strstr(result.standard_output, "filtered") &&
+           strstr(result.standard_output, "no-response"));
+    nm_nmap_runner_result_release(&result);
+    clean();
+
+    atomic_bool cancelled = false;
+    request.cancellation = &cancelled;
+    cancel_after_wait = &cancelled;
+    result = nm_nmap_runner_scan(&request);
+    assert(result.state == NM_NMAP_RUN_CANCELLED);
+    nm_nmap_runner_result_release(&result);
+    cancel_after_wait = NULL;
+    request.cancellation = NULL;
+    ipv6_first = false;
+    connect_mode = TCP_IMMEDIATE;
+    clean();
+
+    request.no_ping = false;
+    arp_state = NM_ARP_LOCAL_FAILURE;
+    result = nm_nmap_runner_scan(&request);
+    assert(result.state == NM_NMAP_RUN_LOCAL_FAILURE);
+    nm_nmap_runner_result_release(&result);
+    clean();
+    request.no_ping = true;
+    unsigned arp_before = arp_probes;
+    result = nm_nmap_runner_scan(&request);
+    assert(result.state == NM_NMAP_RUN_COMPLETED && arp_probes == arp_before);
+    nm_nmap_runner_result_release(&result);
+    clean();
+    arp_state = NM_ARP_OFF_LINK;
+}
+static void nmap_discovery(void)
+{
+    nm_nmap_discovery_request request = {.display_target = "192.0.2.7/24",
+                                         .first_ipv4 = UINT32_C(0xc0000201),
+                                         .target_count = NM_NMAP_MAX_TARGETS,
+                                         .has_ipv4_range = true,
+                                         .timeout_ms = 60000};
+    ping_complete = true;
+    ping_reply = true;
+    nm_nmap_run_result result = nm_nmap_runner_discover(&request);
+    assert(result.state == NM_NMAP_RUN_COMPLETED && result.exit_code == 0);
+    assert(strstr(result.standard_output, "Host: 192.0.2.1 is up\n"));
+    assert(strstr(result.standard_output, "Host: 192.0.2.254 is up\n"));
+    assert(strstr(result.standard_output, "Nmap done: 254 IP addresses (254 hosts up) scanned\n"));
+    unsigned lines = 0;
+    for (const char *p = result.standard_output; *p; ++p)
+        lines += *p == '\n';
+    assert(lines == 256); /* header + 254 results + summary fit command pagination */
+    nm_nmap_runner_result_release(&result);
+    clean();
+
+    /* Fully populated ARP reports include every host/MAC and still fit one
+     * 256-line command page. ICMP failure must not hide fresh ARP replies. */
+    arp_state = NM_ARP_REPLY;
+    ping_reply = false;
+    request.arp_only = true;
+    request.show_reason = true;
+    request.verbosity = 1;
+    result = nm_nmap_runner_discover(&request);
+    assert(result.state == NM_NMAP_RUN_COMPLETED);
+    assert(
+        strstr(result.standard_output, "Host: 192.0.2.254 is up; MAC Address: 02:03:04:05:06:07"));
+    assert(strstr(result.standard_output, "reason=arp-response"));
+    assert(strlen(result.standard_output) > 8192 && strlen(result.standard_output) < 32768);
+    lines = 0;
+    for (const char *p = result.standard_output; *p; ++p)
+        lines += *p == '\n';
+    assert(lines == 256);
+    nm_nmap_runner_result_release(&result);
+    clean();
+    arp_state = NM_ARP_OFF_LINK;
+    result = nm_nmap_runner_discover(&request);
+    assert(result.state == NM_NMAP_RUN_ERROR && strstr(result.error, "local IPv4"));
+    nm_nmap_runner_result_release(&result);
+    clean();
+    request.arp_only = request.show_reason = false;
+    request.verbosity = 0;
+    ping_reply = true;
+
+    request.target_count = 255;
+    result = nm_nmap_runner_discover(&request);
+    assert(result.state == NM_NMAP_RUN_ERROR);
+    nm_nmap_runner_result_release(&result);
+    clean();
+
+    atomic_bool cancelled = true;
+    request.target_count = 1;
+    request.cancellation = &cancelled;
+    result = nm_nmap_runner_discover(&request);
+    assert(result.state == NM_NMAP_RUN_CANCELLED);
+    nm_nmap_runner_result_release(&result);
+    clean();
+
+    assert(nm_esp_endpoint_configure_limit(1));
+    ping_complete = false;
+    nm_esp_result occupied = nm_endpoint_check_icmp("192.0.2.1", 5);
+    assert(!occupied.ok && ping_sessions == 1);
+    nm_esp_result_release(&occupied);
+    request.cancellation = NULL;
+    request.timeout_ms = 20;
+    result = nm_nmap_runner_discover(&request);
+    assert(result.state == NM_NMAP_RUN_LOCAL_FAILURE);
+    nm_nmap_runner_result_release(&result);
+    finish_ping(0);
+    ping_complete = true;
+    assert(nm_esp_endpoint_configure_limit(2));
+    clean();
+
+    atomic_store(&cancelled, false);
+    cancel_after_wait = &cancelled;
+    ping_complete = false;
+    nm_esp_result cancelled_ping =
+        nm_endpoint_check_icmp_cancelable("192.0.2.1", 30000, &cancelled);
+    assert(cancelled_ping.disposition == NM_PROBE_LOCAL_FAILURE && ping_sessions == 1);
+    assert(strstr(cancelled_ping.message, "cancelled"));
+    cancel_after_wait = NULL;
+    finish_ping(0); /* cancellation keeps late callbacks alive and safe */
+    ping_complete = true;
+    clean();
+}
 static void shared_operation_limits(void)
 {
     assert(operation_limit == NM_ENDPOINT_DEFAULT_OPERATIONS);
@@ -771,15 +1082,17 @@ int main(void)
 {
     assert(nm_esp_endpoint_supported("quantum"));
     assert(nm_esp_endpoint_supported("quantumcert"));
-    nm_monitor_record quantum = {.Address = "example.com", .EndPointType = "quantum", .Timeout = 15000};
+    assert(nm_esp_endpoint_supported("nmap"));
+    assert(!nm_esp_endpoint_supported("nmapvuln"));
+    nm_monitor_record quantum = {
+        .Address = "example.com", .EndPointType = "quantum", .Timeout = 15000};
     assert(nm_esp_endpoint_run(&quantum).ok);
     quantum.EndPointType = "quantumcert";
     assert(nm_esp_endpoint_run(&quantum).ok);
     assert(nm_esp_endpoint_supported("blebroadcast"));
     assert(nm_esp_endpoint_supported("blebroadcastlisten"));
-    nm_monitor_record ble = {.Address = "AA:BB:CC:DD:EE:FF",
-                             .EndPointType = "blebroadcast",
-                             .Timeout = 75000};
+    nm_monitor_record ble = {
+        .Address = "AA:BB:CC:DD:EE:FF", .EndPointType = "blebroadcast", .Timeout = 75000};
     nm_esp_result ble_result = nm_esp_endpoint_run(&ble);
     assert(ble_result.ok && ble_result.elapsed_ms == 23);
     assert(ble_monitor_seen == &ble && ble_timeout_seen == 75000);
@@ -792,6 +1105,9 @@ int main(void)
     lifetimes();
     results();
     strict_numbers();
+    nmap_endpoint();
+    nmap_tcp_failures();
+    nmap_discovery();
     clean();
     puts("endpoint execution/lifetime tests passed (all network operations mocked)");
     return 0;

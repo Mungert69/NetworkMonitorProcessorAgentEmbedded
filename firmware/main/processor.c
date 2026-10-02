@@ -39,6 +39,7 @@ static bool yield_commands(void *context)
         nm_processor_dispatch(agent, &incoming);
         free(incoming.body);
     }
+    nm_processor_cmd_poll(agent);
     return agent->connected && !agent->updating;
 }
 
@@ -136,6 +137,7 @@ void nm_esp_processor_run(const nm_esp_config *config)
             if ((int32_t)(next_poll - current) > (int32_t)interval)
                 next_poll = current + interval;
         }
+        nm_processor_cmd_poll(agent);
         TickType_t now = xTaskGetTickCount();
         bool pending = nm_esp_ota_pending();
         if ((pending || !agent->firmware_status_sent) && agent->connected && !agent->updating &&

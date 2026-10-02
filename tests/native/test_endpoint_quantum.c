@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "endpoint_internal.h"
 #include "quantum_tls.h"
+#include "tls_inspection.h"
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -82,6 +83,28 @@ void nm_quantum_result_free(nm_quantum_result *result)
     free(result->summary);
     result->summary = NULL;
 }
+lookup_result nm_endpoint_resolve_cancelable(const char *host, unsigned port, unsigned timeout,
+                                             struct addrinfo **out, const atomic_bool *cancellation)
+{
+    if (cancellation && atomic_load(cancellation))
+        return LOOKUP_CANCELLED;
+    return nm_endpoint_resolve(host, port, timeout, out);
+}
+nm_quantum_result nm_quantum_tls_probe_cancelable(nm_quantum_tls *p, bool cert, const char *host,
+                                                  const struct addrinfo *addresses,
+                                                  int64_t deadline, const atomic_bool *cancellation)
+{
+    if (cancellation && atomic_load(cancellation))
+        return (nm_quantum_result){.outcome = NM_QUANTUM_CANCELLED};
+    return nm_quantum_tls_probe(p, cert, host, addresses, deadline);
+}
+nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *p, bool cert, const char *host,
+                                             const struct addrinfo *addresses, int64_t deadline,
+                                             const atomic_bool *cancel, const char *group)
+{
+    assert(group);
+    return nm_quantum_tls_probe_cancelable(p, cert, host, addresses, deadline, cancel);
+}
 nm_esp_result nm_endpoint_local_failure(unsigned elapsed, const char *detail)
 {
     nm_esp_result r = {.elapsed_ms = elapsed, .disposition = NM_PROBE_LOCAL_FAILURE};
@@ -91,10 +114,29 @@ nm_esp_result nm_endpoint_local_failure(unsigned elapsed, const char *detail)
 
 int main(void)
 {
+    nm_tls_inspection invalid = nm_tls_inspect(NULL);
+    assert(invalid.observation.outcome == NM_QUANTUM_ERROR);
+    nm_tls_inspection_release(&invalid);
+    nm_tls_inspection_request bad = {.host = "example.com", .port = 443};
+    bad.mode = (nm_tls_inspection_mode)99;
+    invalid = nm_tls_inspect(&bad);
+    assert(invalid.observation.outcome == NM_QUANTUM_ERROR && frees == 0);
+    nm_tls_inspection_release(&invalid);
+    bad.port = 65536;
+    bad.mode = NM_TLS_INSPECT_HANDSHAKE;
+    invalid = nm_tls_inspect(&bad);
+    assert(invalid.observation.outcome == NM_QUANTUM_ERROR && frees == 0);
+    nm_tls_inspection_release(&invalid);
     fail_provider = true;
     nm_esp_result r = nm_endpoint_check_quantum("example.com", "quantum", 0, 100);
     assert(r.disposition == NM_PROBE_LOCAL_FAILURE && !r.ok);
     fail_provider = false;
+    clock_us = 1000000;
+    nm_tls_inspection_request expired = {
+        .host = "example.com", .mode = NM_TLS_INSPECT_HANDSHAKE, .timeout_ms = 0};
+    nm_tls_inspection timed = nm_tls_inspect(&expired);
+    assert(timed.observation.outcome == NM_QUANTUM_TIMEOUT && frees == 0);
+    nm_tls_inspection_release(&timed);
     for (unsigned cert = 0; cert < 2; ++cert) {
         for (outcome = NM_QUANTUM_OK; outcome <= NM_QUANTUM_LOCAL_FAILURE; ++outcome) {
             clock_us = 1000000;

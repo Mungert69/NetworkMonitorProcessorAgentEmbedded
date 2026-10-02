@@ -41,10 +41,24 @@ static void ping_done(esp_ping_handle_t handle, void *arg)
     nm_endpoint_release_slot();
 }
 
-static nm_esp_result ping_once(const ip_addr_t *address, unsigned timeout)
+static nm_esp_result ping_once(const ip_addr_t *address, unsigned timeout,
+                               const atomic_bool *cancellation)
 {
     int64_t start = esp_timer_get_time();
-    if (!nm_endpoint_wait_slot(start, timeout))
+    bool admitted = false;
+    while (nm_endpoint_remaining(start, timeout)) {
+        if (cancellation && atomic_load(cancellation))
+            return nm_endpoint_local_failure(nm_endpoint_elapsed(start), "ICMP cancelled");
+        unsigned remaining = nm_endpoint_remaining(start, timeout);
+        unsigned slice = cancellation && remaining > 100 ? 100 : remaining;
+        if (nm_endpoint_wait_slot(esp_timer_get_time(), slice)) {
+            admitted = true;
+            break;
+        }
+        if (!cancellation)
+            break;
+    }
+    if (!admitted)
         return nm_endpoint_local_failure(nm_endpoint_elapsed(start),
                                          "Shared DNS/ICMP operation budget busy");
     ping_context *context = nm_bulk_calloc(1, sizeof(*context));
@@ -91,10 +105,21 @@ static nm_esp_result ping_once(const ip_addr_t *address, unsigned timeout)
     }
     nm_esp_result result = nm_endpoint_result("icmp", NM_ENDPOINT_TIMEOUT, 0, timeout, "TimedOut");
     unsigned budget = nm_endpoint_remaining(start, timeout);
-    if (budget && xSemaphoreTake(context->done, nm_endpoint_wait_ticks(budget)) == pdTRUE) {
-        result = nm_endpoint_result(
-            "icmp", context->success ? NM_ENDPOINT_SUCCESS : NM_ENDPOINT_TIMEOUT, 0,
-            context->success ? context->round_trip_ms : nm_endpoint_elapsed(start), "TimedOut");
+    while (budget) {
+        if (cancellation && atomic_load(cancellation)) {
+            result = nm_endpoint_local_failure(nm_endpoint_elapsed(start), "ICMP cancelled");
+            break;
+        }
+        unsigned slice = cancellation && budget > 100 ? 100 : budget;
+        if (xSemaphoreTake(context->done, nm_endpoint_wait_ticks(slice)) == pdTRUE) {
+            result = nm_endpoint_result(
+                "icmp", context->success ? NM_ENDPOINT_SUCCESS : NM_ENDPOINT_TIMEOUT, 0,
+                context->success ? context->round_trip_ms : nm_endpoint_elapsed(start), "TimedOut");
+            break;
+        }
+        if (!cancellation)
+            break;
+        budget = nm_endpoint_remaining(start, timeout);
     }
     /* Do not touch handle: ping_done may already have deleted the session. */
     ping_release(context);
@@ -103,12 +128,21 @@ static nm_esp_result ping_once(const ip_addr_t *address, unsigned timeout)
 
 nm_esp_result nm_endpoint_check_icmp(const char *host, unsigned timeout)
 {
+    return nm_endpoint_check_icmp_cancelable(host, timeout, NULL);
+}
+
+nm_esp_result nm_endpoint_check_icmp_cancelable(const char *host, unsigned timeout,
+                                                const atomic_bool *cancellation)
+{
+    if (cancellation && atomic_load(cancellation))
+        return nm_endpoint_local_failure(0, "ICMP cancelled");
     ip_addr_t address;
     if (ipaddr_aton(host, &address))
-        return ping_once(&address, timeout);
+        return ping_once(&address, timeout, cancellation);
     int64_t start = esp_timer_get_time();
     struct addrinfo *addresses = NULL;
-    lookup_result lookup = nm_endpoint_resolve(host, 0, timeout, &addresses);
+    lookup_result lookup =
+        nm_endpoint_resolve_cancelable(host, 0, timeout, &addresses, cancellation);
     if (lookup != LOOKUP_OK)
         return nm_endpoint_lookup_failure("icmp", lookup, nm_endpoint_elapsed(start));
     nm_esp_result result =
@@ -127,7 +161,7 @@ nm_esp_result nm_endpoint_check_icmp(const char *host, unsigned timeout)
                                         "TimedOut");
             break;
         }
-        result = ping_once(&address, budget);
+        result = ping_once(&address, budget, cancellation);
         if (result.ok || result.disposition == NM_PROBE_LOCAL_FAILURE)
             break;
     }

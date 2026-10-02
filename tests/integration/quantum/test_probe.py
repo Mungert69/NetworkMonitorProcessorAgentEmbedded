@@ -31,7 +31,7 @@ def main():
         print(allocation_result.stdout.decode(), flush=True)
 
         def check(pair, group, mode, expected, trust=None, hostname="localhost", concurrent=False,
-                  trusted=None):
+                  trusted=None, requested_group=None):
             nonlocal cases
             key, cert = pair[:2]
             with socket.socket() as s:
@@ -55,6 +55,9 @@ def main():
                     args = ([str(probe.with_name("quantum-provider-checks")), mode,
                         hostname, str(port), str(trust or cert), "8", "4"] if concurrent else
                         [str(probe), mode, hostname, str(port), str(trust or cert), "127.0.0.1"])
+                    if requested_group is not None:
+                        assert not concurrent
+                        args.append(requested_group)
                     result = subprocess.run(args, capture_output=True, text=True, timeout=30)
                     if result.returncode != expected:
                         raise AssertionError(f"{mode} {group}: expected {expected}, got "
@@ -79,6 +82,12 @@ def main():
         for group in ("MLKEM512", "MLKEM768", "MLKEM1024", "X25519MLKEM768",
                       "SecP256r1MLKEM768", "SecP384r1MLKEM1024"):
             check(classical, group, "quantum", 0)
+            check(classical, group, "quantum", 0, requested_group=group)
+        check(classical, "MLKEM768", "quantum", 2, requested_group="MLKEM512")
+        check(classical, "MLKEM768", "quantum", 2, requested_group="frodo640aes")
+        check(classical, "MLKEM768", "quantum", 0, requested_group="X25519MLKEM768:MLKEM768")
+        check(classical, "X25519", "quantum", 1, requested_group="X25519")
+        check(classical, "MLKEM768", "quantum", 2, requested_group="MLKEM768:unknown")
         check(classical, "X25519", "quantum", 2)  # no shared PQ group
         check(classical, "X25519MLKEM768", "quantumcert", 1)
         check(classical, "X25519", "quantumcert", 1, trusted=True)
@@ -145,21 +154,22 @@ def main():
             listener.listen(8)
             peers = []
             def accept_stalled():
-                for _ in range(8):
+                for _ in range(16):
                     peer, _ = listener.accept()
                     peers.append(peer)
             thread = threading.Thread(target=accept_stalled)
             thread.start()
             try:
-                result = subprocess.run([str(probe.with_name("quantum-provider-checks")),
-                    "timeout", "localhost", str(listener.getsockname()[1]), str(classical[1]),
-                    "8", "1"], capture_output=True, text=True, timeout=10)
-                if result.returncode:
-                    raise AssertionError(result.stdout + result.stderr)
+                for mode in ("timeout", "cancel"):
+                    result = subprocess.run([str(probe.with_name("quantum-provider-checks")),
+                        mode, "localhost", str(listener.getsockname()[1]), str(classical[1]),
+                        "8", "1"], capture_output=True, text=True, timeout=10)
+                    if result.returncode:
+                        raise AssertionError(result.stdout + result.stderr)
+                    print(mode, result.stdout, flush=True)
+                    cases += 1
                 thread.join(timeout=2)
                 if thread.is_alive(): raise AssertionError("Stalled peer accept did not finish")
-                print(result.stdout, flush=True)
-                cases += 1
             finally:
                 for peer in peers: peer.close()
         print(f"PASS {cases} wolfSSL/OpenSSL interoperability cases")
