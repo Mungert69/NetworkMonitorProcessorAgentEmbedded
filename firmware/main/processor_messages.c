@@ -11,6 +11,7 @@ bool nm_processor_publish_ready(processor *agent, bool ready)
     }
     bool built =
         yyjson_mut_obj_add_strcpy(doc, data, "AppID", agent->config->app_id) &&
+        yyjson_mut_obj_add_strcpy(doc, data, "PType", "ESP32-S3") &&
         yyjson_mut_obj_add_strcpy(doc, data, "AuthKey", agent->config->auth_key) &&
         yyjson_mut_obj_add_bool(doc, data, "IsProcessorReady", ready) &&
         yyjson_mut_obj_add_uint(doc, data, "RabbitTopologyVersion", 2) &&

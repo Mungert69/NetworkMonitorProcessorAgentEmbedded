@@ -120,6 +120,7 @@ bool nm_enrollment_register(nm_esp_config *config)
             strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", &utc);
             bool built = event && data && nm_capabilities_add(doc, data, config->root) &&
                          nm_json_put_str(doc, data, "AppID", config->app_id) &&
+                         nm_json_put_str(doc, data, "PType", "ESP32-S3") &&
                          nm_json_put_str(doc, data, "Owner", config->mqtt_username) &&
                          nm_json_put_str(doc, data, "Location",
                                          nm_enrollment_string(config->root, "MonitorLocation")) &&

@@ -206,3 +206,18 @@ registered hosts without depending on a subsequent Data restart. Missing,
 invalid or unsaved initialization fails enrollment rather than reporting success
 with an empty temporary model. This enrollment snapshot is a deliberate rare
 exception to normal once-per-monitoring-cycle persistence.
+
+## Processor device type
+
+ESP32 registration and authenticated ready messages report `PType: "ESP32-S3"`.
+The backend persists this independently of `IsQuantumCapable`, which selects
+the signature algorithm, not the device platform. Service exposes it as `pType`
+in owned processor summaries. ESP32 firmware updates require this type, an
+enabled processor and command protocol v2; either signing scheme is supported.
+
+The database property is required and defaults to the empty string. Generate
+and apply the Data EF migration before deploying the changed services. Existing
+rows remain blank until updated firmware reports its type; an older ready
+message without a type does not erase a previously recorded value. Other
+processor implementations continue to default to blank. No type is inferred
+from an AppID or quantum capability.
