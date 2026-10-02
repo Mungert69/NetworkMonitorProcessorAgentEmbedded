@@ -10,7 +10,10 @@ typedef struct {
     nm_tls_inspection_mode mode;
     const atomic_bool *cancellation; /* Optional, borrowed through completion. */
     const char *group;               /* Optional canonical OpenSSL group, borrowed. */
-    const char *connect_host; /* Optional DNS destination; host remains SNI/verification identity. */
+    const char
+        *connect_host; /* Optional DNS destination; host remains SNI/verification identity. */
+    const nm_tls_diagnostic_options
+        *diagnostics; /* Optional synchronous diagnostic-only controls. */
 } nm_tls_inspection_request;
 typedef struct {
     nm_quantum_result observation;

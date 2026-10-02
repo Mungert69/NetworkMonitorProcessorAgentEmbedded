@@ -16,7 +16,7 @@ const char *nm_nmap_cmd_help(void)
            "TCP mode scans one host and up to 64 explicit ports; default ports are a small set.\n"
            "-F uses a smaller 8-port set; -Pn assumes host up; --open hides non-open rows.\n"
            "--reason shows TCP-connect classification; -v/-vv adds a scan summary.\n"
-           "-sV reports port-based service hints, not active version fingerprinting.\n"
+           "-sV reports IANA TCP port-name hints, not active service fingerprinting.\n"
            "No SYN/UDP scans, scripts, OS detection, IPv6 CIDR or file output.\n";
 }
 

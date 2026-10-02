@@ -8,7 +8,7 @@
 
 void __wrap_etharp_input(struct pbuf *, struct netif *);
 static struct netif sta;
-static bool in_core, send_reply, contention, bad_packet, exec_failure;
+static bool in_core, send_reply, bad_packet, exec_failure;
 static int send_error;
 static unsigned requests, forwarded, delays;
 static int64_t now;
@@ -98,10 +98,6 @@ void vTaskDelay(TickType_t ticks)
     assert(!in_core);
     now += (int64_t)ticks * 1000;
     ++delays;
-    if (contention) {
-        contention = false;
-        assert(nm_nmap_arp_probe(UINT32_C(0xc0a8012b), 20, NULL).state == NM_ARP_LOCAL_FAILURE);
-    }
     if (cancel_at_delay)
         atomic_store(cancel_at_delay, true);
     if (send_reply)
@@ -117,7 +113,7 @@ static void reset(void)
                          .up = 1,
                          .link_up = 1};
     send_reply = true;
-    contention = bad_packet = exec_failure = false;
+    bad_packet = exec_failure = false;
     send_error = 0;
     requests = forwarded = delays = 0;
     cancel_at_delay = NULL;
@@ -127,7 +123,6 @@ int main(void)
 {
     const uint32_t target = UINT32_C(0xc0a8012a);
     reset();
-    contention = true;
     nm_nmap_arp_result result = nm_nmap_arp_probe(target, 100, NULL);
     const uint8_t expected[6] = {2, 3, 4, 5, 6, 7};
     assert(result.state == NM_ARP_REPLY && !result.local_interface);

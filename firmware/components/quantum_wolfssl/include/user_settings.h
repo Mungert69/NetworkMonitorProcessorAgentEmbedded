@@ -7,6 +7,8 @@
 #define HAVE_HKDF
 #define WC_RSA_PSS
 #define HAVE_SNI
+#define HAVE_ALPN
+#define WOLFSSL_DER_TO_PEM
 #define WOLFSSL_IP_ALT_NAME
 #define HAVE_ECC
 #define HAVE_ECC384
@@ -34,7 +36,7 @@
 /* Each probe is fresh; retaining PQ certificate chains in the global session
  * cache would reserve megabytes of internal BSS. No resumption/cache needed. */
 #define NO_SESSION_CACHE
-#define WOLFSSL_NO_TLS12
+/* TLS 1.2 is diagnostic-only; quantum endpoints still select TLS 1.3 methods. */
 #define NO_OLD_TLS
 #define NO_DH
 #define NO_DSA

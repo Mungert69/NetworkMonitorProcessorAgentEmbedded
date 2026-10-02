@@ -44,9 +44,10 @@ nm_tls_inspection nm_tls_inspect(const nm_tls_inspection_request *request)
                                    .elapsed_ms = nm_endpoint_elapsed(start)};
     struct addrinfo *addresses = NULL;
     lookup_result lookup =
-        request->cancellation ? nm_endpoint_resolve_cancelable(destination, port ? port : 443, remaining,
-                                                               &addresses, request->cancellation)
-                              : nm_endpoint_resolve(destination, port ? port : 443, remaining, &addresses);
+        request->cancellation
+            ? nm_endpoint_resolve_cancelable(destination, port ? port : 443, remaining, &addresses,
+                                             request->cancellation)
+            : nm_endpoint_resolve(destination, port ? port : 443, remaining, &addresses);
     if (lookup != LOOKUP_OK)
         return (nm_tls_inspection){.elapsed_ms = nm_endpoint_elapsed(start),
                                    .observation.outcome =
@@ -56,9 +57,13 @@ nm_tls_inspection nm_tls_inspect(const nm_tls_inspection_request *request)
                                        : lookup == LOOKUP_TIMEOUT ? NM_QUANTUM_TIMEOUT
                                                                   : NM_QUANTUM_ERROR};
     nm_quantum_result probed =
-        request->group ? nm_quantum_tls_probe_group(tls, certificate, host, addresses,
-                                                    monotonic_start + timeout,
-                                                    request->cancellation, request->group)
+        request->diagnostics
+            ? nm_quantum_tls_probe_options(tls, certificate, host, addresses,
+                                           monotonic_start + timeout, request->cancellation,
+                                           request->group, request->diagnostics)
+        : request->group ? nm_quantum_tls_probe_group(tls, certificate, host, addresses,
+                                                      monotonic_start + timeout,
+                                                      request->cancellation, request->group)
         : request->cancellation
             ? nm_quantum_tls_probe_cancelable(tls, certificate, host, addresses,
                                               monotonic_start + timeout, request->cancellation)

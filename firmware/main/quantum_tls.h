@@ -22,6 +22,8 @@ typedef struct {
     char error_message[128];
     char group[64];
     char protocol[24], cipher[128];
+    char alpn[256];
+    char *certificate_pem; /* Owned presented chain, or NULL; released with summary. */
     char signature_algorithm[48], key_algorithm[48];
     bool certificate_trusted;
     int signature_oid, key_oid;
@@ -54,4 +56,17 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool cert
                                              int64_t deadline_ms, const atomic_bool *cancellation,
                                              const char *group);
 int64_t nm_quantum_now_ms(void);
+/* Optional diagnostic controls, borrowed for synchronous execution. NULL keeps
+ * the existing quantum endpoint policy. No provider/global context mutation. */
+typedef struct {
+    const char *ciphersuites, *alpn, *verify_host;
+    bool no_sni, explicit_sni, certificate_details, export_chain;
+    int address_family;   /* 0 = any, 4 = IPv4, 6 = IPv6. */
+    unsigned tls_version; /* 0/13 = TLS 1.3, 12 = TLS 1.2 diagnostics. */
+} nm_tls_diagnostic_options;
+nm_quantum_result nm_quantum_tls_probe_options(nm_quantum_tls *provider, bool certificate,
+                                               const char *host, const struct addrinfo *addresses,
+                                               int64_t deadline_ms, const atomic_bool *cancellation,
+                                               const char *group,
+                                               const nm_tls_diagnostic_options *options);
 #endif

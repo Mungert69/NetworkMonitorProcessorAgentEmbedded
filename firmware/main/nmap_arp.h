@@ -21,7 +21,9 @@ typedef struct {
 } nm_nmap_arp_result;
 
 /* IPv4 address is host-order. One bounded observer is shared by all callers;
- * contention is inconclusive. No caller/packet pointers survive completion.
+ * FIFO admission waits within the same total timeout, with cancellation.
+ * Admission expiry is local/inconclusive, not a host-down ARP timeout.
+ * No caller/packet pointers survive completion.
  * Only a fresh ARP reply addressed to this STA, or the STA itself, proves up.
  * Core callbacks never wait for network I/O. The caller waits outside lwIP.
  */

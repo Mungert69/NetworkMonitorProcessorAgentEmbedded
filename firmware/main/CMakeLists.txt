@@ -9,7 +9,7 @@ idf_component_register(
         "processor_cmd.c" "cmd_processor_message.c" "quantum_cert_cmd_processor.c"
         "quantum_connect_cmd_processor.c" "cmd_arguments.c"
         "cmd_processor_catalog.c" "cmd_output.c" "quantum_port_scanner_cmd_processor.c"
-        "quantum_info_cmd_processor.c" "openssl_cmd_processor.c" "nmap_cmd_processor.c"
+        "quantum_info_cmd_processor.c" "openssl_cmd_processor.c" "openssl_arguments.c" "nmap_cmd_processor.c"
         "processor_messages.c" "processor_ota.c" "message_publish.c" "command_security.c" "command_mldsa.c"
         # Bounded concurrent endpoint probing (model stays single-writer).
         "nm_probe_pool.c"
@@ -19,11 +19,13 @@ idf_component_register(
         # Endpoint implementations and firmware installation.
         "endpoints.c" "endpoint_common.c" "endpoint_dns.c" "endpoint_dns_task.c" "endpoint_icmp.c"
         "endpoint_nmap.c" "nmap_runner_embedded.c" "nmap_targets.c" "nmap_arp.c"
+        "service_hints.c"
         "endpoint_tcp.c" "endpoint_http.c" "endpoint_ble.c" "http_deadline.c" "ota.c"
         "endpoint_quantum.c" "tls_inspection.c" "quantum_tls.c" "openssl_runner.c"
         "../../third_party/yyjson/src/yyjson.c"
     INCLUDE_DIRS "../../third_party/yyjson/src"
     EMBED_TXTFILES "command-signing-public.pem" "command-signing-mldsa-public.pem"
+                   "service-hints.csv"
     REQUIRES esp_psram spi_flash esp_wifi esp_event esp_netif nvs_flash
              mqtt mbedtls lwip esp_http_client tcp_transport esp_timer esp_https_ota
              app_update bt espressif__brotli quantum_wolfssl)

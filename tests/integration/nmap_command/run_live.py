@@ -12,9 +12,15 @@ import pika
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--config", required=True, type=Path, help="private enrolled board config JSON")
 parser.add_argument("--fixtures", required=True, type=Path, help="private .NET-signed fixture directory")
+parser.add_argument("--serial-log", type=Path,
+                    help="fresh private board log; require real ARP FIFO contention and monitor progress")
+parser.add_argument("--monitor-id", type=int, help="assigned Nmap monitor used for overlap assertion")
 args = parser.parse_args()
+if args.serial_log and args.monitor_id is None:
+    parser.error("--serial-log requires --monitor-id")
 root = Path(__file__).resolve().parents[3]
-for path in (args.config.resolve(), args.fixtures.resolve()):
+for path in (args.config.resolve(), args.fixtures.resolve(),
+             *([args.serial_log.resolve()] if args.serial_log else [])):
     if path == root or root in path.parents:
         parser.error("Private inputs/fixtures must stay outside the repository")
 
@@ -95,7 +101,21 @@ try:
         wanted_text = check["contains"]
         if success != wanted_success or wanted_text not in text:
             raise AssertionError((name, success, text, check))
+        rows = [line.split() for line in text.replace("\\n", "\n").splitlines()]
+        for service_port, service_name in (check.get("services") or {}).items():
+            assert any(len(row) >= 3 and row[0] == service_port and row[2] == service_name
+                       for row in rows), (name, service_port, service_name, text)
         print("LIVE_NMAP_PASS", name, flush=True)
+    if args.serial_log:
+        import re
+        log = args.serial_log.read_text(errors="replace")
+        waits = re.findall(r"FIFO wait completed: admitted=1 cancelled=0 wait_ms=(\d+)", log)
+        assert any(int(wait) > 0 for wait in waits), "No real concurrent ARP admission observed"
+        assert re.search(rf"probe id={args.monitor_id} ok=1\b", log), "Scheduled Nmap monitor did not succeed"
+        assert "application acknowledgement applied in RAM" in log, "No backend acknowledgement"
+        assert "ARP discovery could not execute" not in log, "ARP contention still failed"
+        assert "FIFO wait completed: admitted=0 cancelled=0" not in log, "ARP admission expired"
+        print("LIVE_NMAP_FIFO_OVERLAP_PASS", flush=True)
 finally:
     if created and channel.is_open:
         channel.queue_delete(queue)

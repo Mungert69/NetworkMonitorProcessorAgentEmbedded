@@ -42,3 +42,15 @@ if(NM_COMMAND_BENCHMARK_FIXTURES)
     target_link_libraries(command-mldsa-checks PRIVATE wolfssl Threads::Threads)
     target_link_options(command-mldsa-checks PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
 endif()
+add_executable(openssl-adapter-probe openssl_adapter_probe.c
+    "${REPO}/firmware/main/openssl_arguments.c"
+    "${REPO}/firmware/main/openssl_cmd_processor.c"
+    "${REPO}/firmware/main/openssl_runner.c"
+    "${REPO}/firmware/main/cmd_arguments.c"
+    "${REPO}/firmware/main/cmd_output.c"
+    "${REPO}/firmware/main/quantum_tls.c")
+target_include_directories(openssl-adapter-probe PRIVATE "${REPO}/firmware/main")
+target_compile_definitions(openssl-adapter-probe PRIVATE WOLFSSL_USER_SETTINGS _POSIX_C_SOURCE=200809L)
+target_compile_options(openssl-adapter-probe PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+target_link_libraries(openssl-adapter-probe PRIVATE wolfssl Threads::Threads)
+target_link_options(openssl-adapter-probe PRIVATE -Wl,--gc-sections)

@@ -11,7 +11,7 @@ const unsigned char _binary_quantum_roots_pem_start[] = "test";
 __asm__(".global _binary_quantum_roots_pem_end\n"
         ".set _binary_quantum_roots_pem_end, _binary_quantum_roots_pem_start + 4");
 static int64_t clock_us;
-static bool fail_provider, cert_seen;
+static bool fail_provider, cert_seen, diagnostics_seen;
 static unsigned port_seen, timeout_seen, frees;
 static lookup_result lookup = LOOKUP_OK;
 static nm_quantum_outcome outcome;
@@ -105,6 +105,16 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *p, bool cert, const
     assert(group);
     return nm_quantum_tls_probe_cancelable(p, cert, host, addresses, deadline, cancel);
 }
+nm_quantum_result nm_quantum_tls_probe_options(nm_quantum_tls *p, bool cert, const char *host,
+                                               const struct addrinfo *addresses, int64_t deadline,
+                                               const atomic_bool *cancel, const char *group,
+                                               const nm_tls_diagnostic_options *options)
+{
+    assert(options);
+    diagnostics_seen = true;
+    (void)group;
+    return nm_quantum_tls_probe_cancelable(p, cert, host, addresses, deadline, cancel);
+}
 nm_esp_result nm_endpoint_local_failure(unsigned elapsed, const char *detail)
 {
     nm_esp_result r = {.elapsed_ms = elapsed, .disposition = NM_PROBE_LOCAL_FAILURE};
@@ -173,6 +183,17 @@ int main(void)
         }
     }
     assert(frees == 10);
+    clock_us = 1000000;
+    outcome = NM_QUANTUM_OK;
+    nm_tls_diagnostic_options controls = {.no_sni = true, .tls_version = 12};
+    nm_tls_inspection_request diagnostic = {.host = "example.com",
+                                            .port = 443,
+                                            .timeout_ms = 100,
+                                            .mode = NM_TLS_INSPECT_HANDSHAKE,
+                                            .diagnostics = &controls};
+    nm_tls_inspection inspection = nm_tls_inspect(&diagnostic);
+    assert(diagnostics_seen && deadline_seen == 1100 && inspection.elapsed_ms == 50);
+    nm_tls_inspection_release(&inspection);
     for (lookup = LOOKUP_EMPTY; lookup <= LOOKUP_NO_MEMORY; ++lookup) {
         r = nm_endpoint_check_quantum("example.com", "quantum", 9443, 100);
         assert(!r.ok && port_seen == 9443);

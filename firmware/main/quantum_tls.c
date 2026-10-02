@@ -38,9 +38,10 @@ int64_t nm_quantum_now_ms(void)
     return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 
-static WOLFSSL_CTX *new_context(const unsigned char *pem, size_t length)
+static WOLFSSL_CTX *new_context_version(const unsigned char *pem, size_t length, unsigned version)
 {
-    WOLFSSL_CTX *context = wolfSSL_CTX_new(wolfTLSv1_3_client_method());
+    WOLFSSL_CTX *context =
+        wolfSSL_CTX_new(version == 12 ? wolfTLSv1_2_client_method() : wolfTLSv1_3_client_method());
     if (!context)
         return NULL;
     if (wolfSSL_CTX_load_verify_buffer(context, pem, (long)length, WOLFSSL_FILETYPE_PEM) !=
@@ -50,6 +51,10 @@ static WOLFSSL_CTX *new_context(const unsigned char *pem, size_t length)
     }
     wolfSSL_CTX_set_verify(context, WOLFSSL_VERIFY_PEER, NULL);
     return context;
+}
+static WOLFSSL_CTX *new_context(const unsigned char *pem, size_t length)
+{
+    return new_context_version(pem, length, 13);
 }
 
 nm_quantum_tls *nm_quantum_tls_new(const unsigned char *pem, size_t length)
@@ -88,6 +93,8 @@ void nm_quantum_result_free(nm_quantum_result *result)
     if (result) {
         free(result->summary);
         result->summary = NULL;
+        free(result->certificate_pem);
+        result->certificate_pem = NULL;
     }
 }
 
@@ -264,21 +271,76 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool cert
                                              int64_t deadline, const atomic_bool *cancellation,
                                              const char *requested_group)
 {
+    return nm_quantum_tls_probe_options(provider, certificate, host, addresses, deadline,
+                                        cancellation, requested_group, NULL);
+}
+
+/* All-or-nothing bounded chain export. Never return a silently truncated chain. */
+static char *export_chain(WOLFSSL *ssl)
+{
+    WOLFSSL_X509_CHAIN *chain = wolfSSL_get_peer_chain(ssl);
+    int count = chain ? wolfSSL_get_chain_count(chain) : 0;
+    if (count < 1 || count > 16)
+        return NULL;
+    size_t total = 0;
+    for (int i = 0; i < count; ++i) {
+        int length = wolfSSL_get_chain_length(chain, i);
+        if (length < 1 || length > 16384)
+            return NULL;
+        size_t encoded = 4 * (((size_t)length + 2) / 3);
+        size_t bound = encoded + (encoded + 63) / 64 + 128;
+        if (bound > 24576 - total)
+            return NULL;
+        total += bound;
+    }
+    char *pem = nm_bulk_malloc(total + 1);
+    if (!pem)
+        return NULL;
+    size_t used = 0;
+    for (int i = 0; i < count; ++i) {
+        int written = 0;
+        if (wolfSSL_get_chain_cert_pem(chain, i, (unsigned char *)pem + used, (int)(total - used),
+                                       &written) != WOLFSSL_SUCCESS ||
+            written < 1 || (size_t)written > total - used) {
+            free(pem);
+            return NULL;
+        }
+        used += (size_t)written;
+    }
+    pem[used] = 0;
+    return pem;
+}
+
+nm_quantum_result nm_quantum_tls_probe_options(nm_quantum_tls *provider, bool certificate,
+                                               const char *host, const struct addrinfo *addresses,
+                                               int64_t deadline, const atomic_bool *cancellation,
+                                               const char *requested_group,
+                                               const nm_tls_diagnostic_options *options)
+{
     nm_quantum_result result = {.outcome = NM_QUANTUM_ERROR, .certificate_trusted = true};
     WOLFSSL_CTX *observation_context = NULL;
     WOLFSSL *ssl = NULL;
     WOLFSSL_X509 *cert = NULL;
     int fd = -1;
-    if (!provider || !host || !*host || strlen(host) > 253 || !addresses)
+    if (!provider || !host || !*host || strlen(host) > 253 || !addresses ||
+        (options && options->tls_version && options->tls_version != 12 &&
+         options->tls_version != 13) ||
+        (options && options->verify_host &&
+         (!*options->verify_host || strlen(options->verify_host) > 253)) ||
+        (options && options->address_family && options->address_family != 4 &&
+         options->address_family != 6))
         return result;
-    if (certificate) {
-        observation_context = new_context(provider->trusted_pem, provider->trusted_pem_length);
+    bool private_context = certificate || (options && options->tls_version == 12);
+    if (private_context) {
+        observation_context =
+            new_context_version(provider->trusted_pem, provider->trusted_pem_length,
+                                options ? options->tls_version : 13);
         if (!observation_context) {
             result.outcome = NM_QUANTUM_LOCAL_FAILURE;
             goto cleanup;
         }
     }
-    ssl = wolfSSL_new(certificate ? observation_context : provider->context);
+    ssl = wolfSSL_new(private_context ? observation_context : provider->context);
     if (!ssl) {
         result.outcome = NM_QUANTUM_LOCAL_FAILURE;
         goto cleanup;
@@ -292,23 +354,45 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool cert
         wolfSSL_SetCertCbCtx(ssl, &result.certificate_trusted);
         wolfSSL_set_verify(ssl, WOLFSSL_VERIFY_PEER, observe_certificate_trust);
     }
-    if ((!certificate && (numeric ? wolfSSL_check_ip_address(ssl, host)
-                                  : wolfSSL_check_domain_name(ssl, host)) != WOLFSSL_SUCCESS) ||
-        (!numeric && wolfSSL_UseSNI(ssl, WOLFSSL_SNI_HOST_NAME, host,
-                                    (unsigned short)strlen(host)) != WOLFSSL_SUCCESS)) {
+    const char *verify_host = options && options->verify_host ? options->verify_host : host;
+    bool verify_numeric =
+        inet_pton(AF_INET, verify_host, ip) == 1 || inet_pton(AF_INET6, verify_host, ip) == 1;
+    if ((!certificate &&
+         (verify_numeric ? wolfSSL_check_ip_address(ssl, verify_host)
+                         : wolfSSL_check_domain_name(ssl, verify_host)) != WOLFSSL_SUCCESS) ||
+        ((!numeric || (options && options->explicit_sni)) && !(options && options->no_sni) &&
+         wolfSSL_UseSNI(ssl, WOLFSSL_SNI_HOST_NAME, host, (unsigned short)strlen(host)) !=
+             WOLFSSL_SUCCESS)) {
         result.outcome = NM_QUANTUM_LOCAL_FAILURE;
         goto cleanup;
     }
+    if (options && options->ciphersuites &&
+        wolfSSL_set_cipher_list(ssl, options->ciphersuites) != WOLFSSL_SUCCESS) {
+        snprintf(result.error_message, sizeof(result.error_message),
+                 "Unsupported TLS cipher suite");
+        goto cleanup;
+    }
+    if (options && options->alpn) {
+        size_t length = strlen(options->alpn);
+        if (!length || length > 511 ||
+            wolfSSL_UseALPN(ssl, (char *)options->alpn, (unsigned)length,
+                            WOLFSSL_ALPN_CONTINUE_ON_MISMATCH) != WOLFSSL_SUCCESS) {
+            snprintf(result.error_message, sizeof(result.error_message), "Invalid ALPN protocols");
+            goto cleanup;
+        }
+    }
     int groups[] = {WOLFSSL_X25519MLKEM768, WOLFSSL_SECP256R1MLKEM768, WOLFSSL_SECP384R1MLKEM1024,
                     WOLFSSL_ML_KEM_512,     WOLFSSL_ML_KEM_768,        WOLFSSL_ML_KEM_1024,
-                    WOLFSSL_ECC_X25519,     WOLFSSL_ECC_SECP256R1};
-    int selected[8];
+                    WOLFSSL_ECC_X25519,     WOLFSSL_ECC_SECP256R1,     WOLFSSL_ECC_SECP384R1,
+                    WOLFSSL_ECC_SECP521R1};
+    int selected[16];
     size_t selected_count = 0;
     if (requested_group) {
         static const char *const names[] = {
             "X25519MLKEM768", "SecP256r1MLKEM768", "SecP384r1MLKEM1024",
             "MLKEM512",       "MLKEM768",          "MLKEM1024",
-            "X25519",         "secp256r1"};
+            "X25519",         "secp256r1",         "secp384r1",
+            "secp521r1"};
         if (strlen(requested_group) > 511)
             goto cleanup;
         char copy[512];
@@ -322,7 +406,7 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool cert
             for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
                 if (!strcmp(cursor, names[i]))
                     id = groups[i];
-            if (!id || selected_count == 8) {
+            if (!id || selected_count == 16) {
                 selected_count = 0;
                 break;
             }
@@ -343,6 +427,9 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool cert
         goto cleanup;
     }
     for (const struct addrinfo *a = addresses; a; a = a->ai_next) {
+        if (options && ((options->address_family == 4 && a->ai_family != AF_INET) ||
+                        (options->address_family == 6 && a->ai_family != AF_INET6)))
+            continue;
         if (cancellation && atomic_load(cancellation)) {
             result.outcome = NM_QUANTUM_CANCELLED;
             goto cleanup;
@@ -451,13 +538,20 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool cert
     const char *protocol = wolfSSL_get_version(ssl), *cipher = wolfSSL_get_cipher(ssl);
     snprintf(result.protocol, sizeof(result.protocol), "%s", protocol ? protocol : "unknown");
     snprintf(result.cipher, sizeof(result.cipher), "%s", cipher ? cipher : "unknown");
+    char *protocol_name = NULL;
+    unsigned short protocol_length = 0;
+    if (wolfSSL_ALPN_GetProtocol(ssl, &protocol_name, &protocol_length) == WOLFSSL_SUCCESS &&
+        protocol_name && protocol_length < sizeof(result.alpn)) {
+        memcpy(result.alpn, protocol_name, protocol_length);
+        result.alpn[protocol_length] = 0;
+    }
     if (group) {
         int length = snprintf(result.group, sizeof(result.group), "%s", group);
         if (length < 0 || (size_t)length >= sizeof(result.group))
             goto cleanup;
     }
     bool safe;
-    if (certificate) {
+    if (certificate || (options && options->certificate_details)) {
         cert = wolfSSL_get_peer_certificate(ssl);
         if (!cert) {
             result.outcome = NM_QUANTUM_LOCAL_FAILURE;
@@ -478,6 +572,14 @@ nm_quantum_result nm_quantum_tls_probe_group(nm_quantum_tls *provider, bool cert
     } else
         safe = group && (strstr(group, "MLKEM") || strstr(group, "ML_KEM"));
     result.outcome = safe ? NM_QUANTUM_OK : NM_QUANTUM_NEGATIVE;
+    if (options && options->export_chain) {
+        result.certificate_pem = export_chain(ssl);
+        if (!result.certificate_pem) {
+            result.outcome = NM_QUANTUM_LOCAL_FAILURE;
+            snprintf(result.error_message, sizeof(result.error_message),
+                     "Certificate chain allocation or 24 KiB export limit exceeded");
+        }
+    }
 cleanup:
     /* Preserve negotiated-group evidence even if certificate verification fails.
      * It is diagnostic only: success still requires the authenticated handshake. */

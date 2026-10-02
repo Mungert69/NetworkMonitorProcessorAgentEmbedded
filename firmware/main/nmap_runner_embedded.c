@@ -3,6 +3,7 @@
 #include "endpoint_resource.h"
 #include "nmap_targets.h"
 #include "nmap_arp.h"
+#include "service_hints.h"
 #include "nm_memory.h"
 #include "esp_timer.h"
 #include <errno.h>
@@ -29,41 +30,6 @@ enum {
     NMAP_MAX_SCAN_MS = 120000,
     NMAP_DOTNET_TIMEOUT_MULTIPLIER = 10
 };
-
-typedef struct {
-    uint16_t port;
-    const char *service;
-} service_hint;
-static const service_hint service_hints[] = {{21, "ftp"},
-                                             {22, "ssh"},
-                                             {23, "telnet"},
-                                             {25, "smtp"},
-                                             {53, "domain"},
-                                             {80, "http"},
-                                             {110, "pop3"},
-                                             {143, "imap"},
-                                             {443, "https"},
-                                             {445, "microsoft-ds"},
-                                             {587, "submission"},
-                                             {993, "imaps"},
-                                             {995, "pop3s"},
-                                             {1433, "ms-sql-s"},
-                                             {1883, "mqtt"},
-                                             {3306, "mysql"},
-                                             {3389, "ms-wbt-server"},
-                                             {5432, "postgresql"},
-                                             {5672, "amqp"},
-                                             {5900, "vnc"},
-                                             {8080, "http-proxy"},
-                                             {8443, "https-alt"}};
-
-static const char *service_for_port(uint16_t port)
-{
-    for (size_t i = 0; i < sizeof(service_hints) / sizeof(service_hints[0]); ++i)
-        if (service_hints[i].port == port)
-            return service_hints[i].service;
-    return "unknown";
-}
 
 static unsigned scan_budget(unsigned timeout_ms)
 {
@@ -410,11 +376,13 @@ nm_nmap_run_result nm_nmap_runner_scan(const nm_nmap_scan_request *request)
                              : errors[i] == ETIMEDOUT    ? "no-response"
                              : errors[i]                 ? "network-error"
                                                          : "no-response";
+        char service[64] = "unknown";
+        (void)nm_service_hint_lookup(ports[i], service, sizeof(service));
         report_ok = request->show_reason
                         ? append_report(report, NMAP_MAX_REPORT, &used, "%u/tcp %-9s %-14s %s\n",
-                                        ports[i], state, service_for_port(ports[i]), reason)
+                                        ports[i], state, service, reason)
                         : append_report(report, NMAP_MAX_REPORT, &used, "%u/tcp %-9s %s\n",
-                                        ports[i], state, service_for_port(ports[i]));
+                                        ports[i], state, service);
     }
     if (report_ok && request->verbosity)
         report_ok = append_report(report, NMAP_MAX_REPORT, &used,

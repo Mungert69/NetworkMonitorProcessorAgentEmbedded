@@ -131,6 +131,7 @@ processor implementation in this repository.
 | `cmd_processor_catalog.*`, `cmd_arguments.*`, `cmd_output.*` | Fixed typed command dispatch, bounded CLI parsing and owned PSRAM output |
 | `quantum_*_cmd_processor.*`, `openssl_cmd_processor.*`, `nmap_cmd_processor.*` | Individual command policies; keep transport and provider handles out of these interfaces |
 | `openssl_runner.*`, `nmap_runner*`, `tls_inspection.*` | Typed process-like OpenSSL/wolfSSL and TCP scanner adapters |
+| `openssl_arguments.c` | Bounded OpenSSL command parsing/conflicts; see [compatibility report](openssl-adapter.md) |
 | `processor_messages.c`, `message_publish.c`, `processor_ota.c`, `ota.c` | Ready/status payloads, shared encoding, OTA command/job coordination, image installation |
 | `command_security.c`, `command_mldsa.c` | ES256 envelopes or .NET ML-DSA-65 objects, selected strictly by configured capability |
 | `monitor_record.c`, `monitor_snapshot.c`, `monitor_model.c` | Record ownership/JSON codec, snapshot persistence format, monitoring transitions |
@@ -145,7 +146,8 @@ Nmap uses its argv/result runner; quantum endpoints share the typed
 deadline; `quantum_tls.c` contains wolfSSL-specific socket/TLS/certificate work.
 HTTP retains its deadline transport and BLE its shared scanner. DNS/ICMP/TCP
 retain their narrow platform helpers. None of these layers introduces another
-task, shell, IPC protocol or OpenSSL command-line parser. Certificate observation
+task, shell or IPC protocol. The `Openssl` command has its own bounded CLI parser;
+monitoring endpoints use typed requests, not CLI text. Certificate observation
 remains separate from authenticated TLS; MQTT/HTTP/OTA TLS is unchanged.
 
 Private `*_internal.h` headers describe module boundaries and ownership.

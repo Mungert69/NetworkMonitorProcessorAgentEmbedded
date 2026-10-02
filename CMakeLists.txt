@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(networkmonitor_esp32_host_tests LANGUAGES C)
+project(networkmonitor_esp32_host_tests LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -133,11 +133,20 @@ target_compile_options(test_storage_adapter PRIVATE -Wall -Wextra -Wpedantic -We
 target_link_libraries(test_storage_adapter PRIVATE yyjson ${BROTLI_ENC} ${BROTLI_DEC} ${BROTLI_COMMON})
 target_link_options(test_storage_adapter PRIVATE -Wl,--gc-sections)
 add_test(NAME native-storage_adapter COMMAND test_storage_adapter)
+add_library(test_service_data STATIC firmware/main/service_hints.c tests/native/service_hints_data.S)
+target_include_directories(test_service_data PUBLIC firmware/main)
+target_compile_definitions(test_service_data PRIVATE NM_SERVICE_HINTS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/firmware/main/service-hints.csv")
+target_compile_options(test_service_data PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall;-Wextra;-Wpedantic;-Werror>)
+set_property(SOURCE tests/native/service_hints_data.S APPEND PROPERTY OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/firmware/main/service-hints.csv")
+add_executable(test_service_hints tests/native/test_service_hints.c)
+target_compile_options(test_service_hints PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+target_link_libraries(test_service_hints PRIVATE test_service_data)
+add_test(NAME native-service_hints COMMAND test_service_hints ${CMAKE_CURRENT_SOURCE_DIR}/firmware/main/service-hints.csv)
 add_executable(test_endpoint_execution tests/native/test_endpoint_execution.c ${NM_MODEL_SOURCES} firmware/main/monitor_numbers.c firmware/main/monitor_schedule.c)
 target_include_directories(test_endpoint_execution PRIVATE tests/native/endpoint_stubs firmware/main)
 target_compile_definitions(test_endpoint_execution PRIVATE _POSIX_C_SOURCE=200809L)
 target_compile_options(test_endpoint_execution PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
-target_link_libraries(test_endpoint_execution PRIVATE yyjson m Threads::Threads)
+target_link_libraries(test_endpoint_execution PRIVATE yyjson m Threads::Threads test_service_data)
 add_test(NAME native-endpoint_execution COMMAND test_endpoint_execution)
 add_executable(test_nmap_arp tests/native/test_nmap_arp.c firmware/main/nmap_arp.c)
 target_include_directories(test_nmap_arp PRIVATE tests/native/arp_stubs
@@ -145,6 +154,14 @@ target_include_directories(test_nmap_arp PRIVATE tests/native/arp_stubs
 target_compile_definitions(test_nmap_arp PRIVATE _POSIX_C_SOURCE=200809L)
 target_compile_options(test_nmap_arp PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 add_test(NAME native-nmap_arp COMMAND test_nmap_arp)
+add_executable(test_nmap_arp_admission tests/native/test_nmap_arp_admission.c)
+target_include_directories(test_nmap_arp_admission PRIVATE tests/native/arp_stubs
+  tests/native/endpoint_stubs firmware/main third_party/yyjson/src)
+target_compile_definitions(test_nmap_arp_admission PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_options(test_nmap_arp_admission PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG -ffunction-sections -fdata-sections)
+target_link_options(test_nmap_arp_admission PRIVATE -Wl,--gc-sections)
+target_link_libraries(test_nmap_arp_admission PRIVATE Threads::Threads)
+add_test(NAME native-nmap_arp_admission COMMAND test_nmap_arp_admission)
 add_executable(test_endpoint_quantum tests/native/test_endpoint_quantum.c firmware/main/endpoint_quantum.c firmware/main/tls_inspection.c)
 target_include_directories(test_endpoint_quantum PRIVATE tests/native/endpoint_stubs firmware/main third_party/yyjson/src)
 target_compile_definitions(test_endpoint_quantum PRIVATE _POSIX_C_SOURCE=200809L asm=__asm__)
@@ -175,7 +192,8 @@ add_executable(test_quantum_cert_cmd tests/native/test_quantum_cert_cmd.c
     firmware/main/quantum_connect_cmd_processor.c firmware/main/openssl_runner.c firmware/main/cmd_arguments.c
     firmware/main/cmd_processor_catalog.c firmware/main/cmd_output.c
     firmware/main/quantum_port_scanner_cmd_processor.c firmware/main/quantum_info_cmd_processor.c
-    firmware/main/openssl_cmd_processor.c firmware/main/nmap_cmd_processor.c firmware/main/nmap_targets.c
+    firmware/main/openssl_cmd_processor.c firmware/main/openssl_arguments.c
+    firmware/main/nmap_cmd_processor.c firmware/main/nmap_targets.c
     firmware/main/processor_cmd.c)
 target_include_directories(test_quantum_cert_cmd PRIVATE tests/native/cmd_stubs tests/stubs firmware/main)
 target_compile_definitions(test_quantum_cert_cmd PRIVATE _POSIX_C_SOURCE=200809L)
@@ -183,6 +201,22 @@ target_compile_options(test_quantum_cert_cmd PRIVATE -Wall -Wextra -Wpedantic -W
 target_link_libraries(test_quantum_cert_cmd PRIVATE yyjson Threads::Threads)
 add_test(NAME native-quantum_cert_cmd COMMAND test_quantum_cert_cmd)
 set_tests_properties(native-quantum_cert_cmd PROPERTIES TIMEOUT 15)
+add_executable(test_openssl_adapter tests/native/test_openssl_adapter.c
+    firmware/main/openssl_arguments.c firmware/main/openssl_cmd_processor.c
+    firmware/main/openssl_runner.c firmware/main/cmd_arguments.c firmware/main/cmd_output.c)
+target_include_directories(test_openssl_adapter PRIVATE firmware/main)
+target_compile_definitions(test_openssl_adapter PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_options(test_openssl_adapter PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+add_test(NAME native-openssl_adapter COMMAND test_openssl_adapter)
+add_executable(test_tls_certificate_export tests/native/test_tls_certificate_export.c)
+target_include_directories(test_tls_certificate_export PRIVATE firmware/main third_party/wolfssl
+    firmware/components/quantum_wolfssl/include)
+target_compile_definitions(test_tls_certificate_export PRIVATE WOLFSSL_USER_SETTINGS)
+target_compile_options(test_tls_certificate_export PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG
+    -ffunction-sections -fdata-sections)
+target_link_options(test_tls_certificate_export PRIVATE -Wl,--gc-sections
+    -Wl,--wrap=malloc -Wl,--wrap=free)
+add_test(NAME native-tls_certificate_export COMMAND test_tls_certificate_export)
 add_test(NAME tooling COMMAND ${Python3_EXECUTABLE} -m unittest discover
   -s ${CMAKE_CURRENT_SOURCE_DIR}/tests/tooling -p test_*.py)
 # Firmware is built separately with tools/build-firmware.sh (ESP-IDF).

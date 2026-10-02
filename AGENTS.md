@@ -72,6 +72,8 @@ Within `firmware/main/`, put work in the following places:
 | `cmd_processor_catalog.*`, `cmd_arguments.*`, `cmd_output.*` | Fixed typed dispatch, bounded CLI parsing and owned PSRAM reports; no MQTT/provider coupling |
 | `quantum_*_cmd_processor.*`, `openssl_cmd_processor.*`, `nmap_cmd_processor.*` | Six individual command policies; keep provider I/O behind typed runners |
 | `openssl_runner.*`, `nmap_runner*`, `tls_inspection.*` | Process-like TLS/TCP adapters, OpenSSL group naming and structured observations; no shell execution |
+| `openssl_arguments.c` | Bounded OpenSSL CLI parsing; see the API/CLI subset in `docs/openssl-adapter.md` |
+| `service_hints.*`, `service-hints.csv` | Read-only IANA TCP service labels; refresh the sorted data with `tools/update-service-hints.py` |
 | `processor_mqtt.c` | MQTT events, subscriptions and command-buffer enqueueing |
 | `processor_commands.c` | Route checking, signature/AuthKey gates and command delegation |
 | `nm_probe_pool.c`, `nm_probe_pool.h` | Bounded concurrent endpoint-probe executor; endpoint I/O only, never touches the model |

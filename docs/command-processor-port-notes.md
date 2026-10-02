@@ -45,8 +45,9 @@ groups in one handshake, not .NET's larger OpenSSL/OQS catalog. Results use the
 `cmd_processor_catalog.*` dispatches typed requests to six independent command
 policies. It has no MQTT, JSON or provider-library dependencies. `cmd_output.*`
 owns bounded PSRAM diagnostic text; overflow returns a short failed result,
-never a permanently unpublishable result. TLS reports remain capped at 8192
-bytes; Nmap reports and the shared formatter allow 32768 bytes and 256 lines.
+never a permanently unpublishable result. Ordinary TLS reports remain capped at
+8192 bytes; OpenSSL reports requesting PEM chains and Nmap reports allow 32768
+bytes. The shared formatter also enforces a 256-line limit.
 
 `QuantumPortScanner` accepts up to 20 explicit TCP ports. Without a port list,
 it uses the project-owned TCP runner's structured open-port result, not parsed
@@ -63,16 +64,17 @@ project-owned eight-port set when no explicit ports are given; explicit `-p`
 takes precedence. `-Pn` skips discovery and assumes the target is up; without
 it, reachability uses local ARP and TCP results (the complete Nmap ping-probe
 set is not implemented). `--open` suppresses closed/filtered rows. `-sV` reports
-built-in service-name hints, **not active version detection**. No NSE, UDP, raw
+built-in IANA TCP service-name hints, **not active version detection**. The
+5,889-entry data file is embedded read-only and can be refreshed with
+`python3 tools/update-service-hints.py`. No NSE, UDP, raw
 SYN, OS fingerprinting, IPv6 CIDR or Nmap source/data is included.
 
-`Openssl` implements `version`, `list -tls-groups`, and bounded TLS 1.3
-`s_client` diagnostics (`-connect`, `-servername`, `-groups`/`-curves`,
-`-tls1_3`, `-showcerts`, `-brief`, `-verify_return_error`). It translates typed
-requests through `openssl_runner` to wolfSSL. Output is structured diagnostics,
-not byte-identical OpenSSL CLI output or PEM export. Files, shell operators,
-TLS 1.2 and other subcommands/options fail explicitly. Observational certificate
-inspection does not require trust; `-verify_return_error` requires verification.
+`Openssl` provides TLS 1.3 and explicit TLS 1.2 AES-GCM `s_client` diagnostics,
+group/cipher selection, SNI/ALPN, verification identities and presented PEM-chain
+export, plus `version`, group/cipher listing and help. Typed requests pass through
+`openssl_runner` to wolfSSL; unsupported options/subcommands fail explicitly.
+See the [full compatibility report](openssl-adapter.md) for supported switches,
+API mappings, limits, deliberate differences and reproducible tests.
 
 `QuantumInfo` embeds the 75 records from the .NET algorithm metadata catalog
 and supports exact/partial searches and common Kyber/Dilithium aliases. The

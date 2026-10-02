@@ -14,7 +14,7 @@ the repository. The private ML-DSA key signs the .NET-compatible command
 envelope. The runner reads the dev RabbitMQ password from the local `data`
 container without printing it.
 
-Example, using the test listener on `192.168.1.238:45678`:
+Run from the repository root. Example, using the test listener on `192.168.1.238:45678`:
 
 ```sh
 umask 077
@@ -40,6 +40,10 @@ test target, the harness also sends `-sn` against that target's `/24` and checks
 the bounded-sweep summary, then confirms a `/23` is rejected before probing.
 It also checks fresh local ARP/MAC discovery, off-link `-PR` rejection,
 conflicting options, empty tokens, and cancellation of an in-flight sweep.
+Service-name cases check the precise port rows for LDAP, submission over TLS,
+secure MQTT, the first/last registry entries and the dynamic-port unknown fallback.
+The known listener's expected label comes from the service file; TCP port 45678
+is registered as `eba`, even though our fixture listener is not that protocol.
 Passing an option case means its current command path completes; it does not
 imply full Nmap semantics for every accepted flag:
 
@@ -65,3 +69,16 @@ imply full Nmap semantics for every accepted flag:
 The fixture generator uses the original `NetworkMonitorLib` message model and
 signer. The MQTT runner preserves the signed JSON bytes; reserializing the
 fixture would invalidate its ML-DSA signature.
+
+### Scheduled-monitor contention
+
+Keep an assigned Nmap monitor enabled against the test host. Capture a **fresh**
+private serial log, then start the harness so the roughly 50-second `/24` sweep
+overlaps a scheduled monitoring cycle (normally start around 20 seconds after
+boot). Add `--serial-log /private/current-run.log --monitor-id YOUR_MONITOR_ID`.
+The runner then also requires an actual positive-duration successful FIFO wait,
+a successful scheduled Nmap probe and a backend application acknowledgement,
+and rejects the previous ARP-unavailable/busy failure. If no overlap happened,
+the assertion fails: retime the run rather than treating absence of contention
+as proof. The host admission test separately exercises FIFO order, cancellation
+of a middle waiter, admission expiry and removal/reuse using production code.

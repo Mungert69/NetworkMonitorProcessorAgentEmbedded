@@ -256,8 +256,9 @@ int main(void)
         "s_client -connect '[::1]:8443' -servername example.com -groups MLKEM768:X25519", 30000,
         &command, &parse_error));
     assert(!strcmp(command.data.openssl.host, "::1") && command.data.openssl.port == 8443);
-    assert(!nm_cmd_kind_parse(NM_CMD_OPENSSL, "s_client -connect example.com:443 -tls1_2", 30000,
-                              &command, &parse_error));
+    assert(nm_cmd_kind_parse(NM_CMD_OPENSSL, "s_client -connect example.com:443 -tls1_2", 30000,
+                             &command, &parse_error));
+    assert(command.data.openssl.tls_version == 12);
     assert(!nm_cmd_kind_parse(NM_CMD_OPENSSL, "s_client -connect example.com:443 | openssl x509",
                               30000, &command, &parse_error));
     assert(nm_cmd_kind_parse(NM_CMD_NMAP, "-sT -Pn --open --reason -vv -p 443,8443 example.com",
