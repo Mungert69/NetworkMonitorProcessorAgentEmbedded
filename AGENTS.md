@@ -168,6 +168,11 @@ exercise the firmware's encoder in host publication/parity tests.
   counters are `int32_t`. Follow the schema for other fields. Never route IDs
   through `double`, assume `long` has the same width on host and Xtensa, or use
   saturation/truncation to conceal a mismatched type.
+- `PingInfo.Status` uses fixed category labels. The backend assigns each distinct
+  string an unsigned 16-bit status ID. Keep changing measurements, addresses,
+  TLS diagnostics and payloads in monitor diagnostics or command output; never
+  append them to a ping status. Metric samples retain their existing numeric
+  fields and scaling.
 - Preserve unknown/extended object fields through the existing immutable
   extension mechanism. Do not drop fields to save RAM or shrink payloads.
 - Use typed records/arrays for monitoring work. JSON belongs at command,

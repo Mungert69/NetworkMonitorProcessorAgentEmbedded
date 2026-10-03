@@ -40,7 +40,11 @@ tokenization/numeric parsing, independently of command policy.
 The device tests an explicit list of at most 16 algorithms sequentially, within
 one command budget. Omitted algorithms offer the six compiled standardized PQ
 groups in one handshake, not .NET's larger OpenSSL/OQS catalog. Results use the
-.NET success-filtering and no-supported-algorithm report structure.
+.NET success-filtering structure. When no attempt succeeds, the device reports
+"Quantum-safe handshake failed" and retains each TLS diagnostic as the reason.
+This describes the tested connection, not proof that the server supports no PQ
+algorithms. Cancellation and timeout remain separate failed results. Successful
+handshake and certificate-reporting behavior is unchanged.
 
 `cmd_processor_catalog.*` dispatches typed requests to six independent command
 policies. It has no MQTT, JSON or provider-library dependencies. `cmd_output.*`

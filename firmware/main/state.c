@@ -477,7 +477,7 @@ static bool drain_probe(nm_esp_state *s, bool *cycle_ok)
         ESP_LOGI(TAG, "probe id=%ld ok=%d elapsed_ms=%u", (long)reply.monitor_id, reply.result.ok,
                  reply.result.elapsed_ms);
         applied = nm_model_probe(&next, reply.monitor_id, reply.result.ok, rtt,
-                                 *reply.result.status ? reply.result.status : reply.result.message,
+                                 *reply.result.status ? reply.result.status : "Unknown probe status",
                                  reply.result.detail_message ? reply.result.detail_message : reply.result.message,
                                  when, date);
     }
@@ -546,7 +546,7 @@ static bool run_sequential(nm_esp_state *s, const nm_esp_config *config)
             ESP_LOGI(TAG, "probe id=%ld type=%s ok=%d elapsed_ms=%u", (long)id, type, result.ok,
                      result.elapsed_ms);
             valid = nm_model_probe(&next, id, result.ok, rtt,
-                                   *result.status ? result.status : result.message,
+                                   *result.status ? result.status : "Unknown probe status",
                                    result.detail_message ? result.detail_message : result.message,
                                    when, date);
             nm_esp_result_release(&result);

@@ -182,7 +182,7 @@ nm_cmd_result nm_quantum_connect_cmd_run(const nm_quantum_connect_command *reque
         output.output = nm_bulk_calloc(1, error_length + 64);
         if (output.output)
             snprintf(output.output, error_length + 64,
-                     "No quantum-safe algorithms supported. Errors:\n%s", errors);
+                     "Quantum-safe handshake failed. Reasons:\n%s", errors);
     }
     free(success);
     free(errors);

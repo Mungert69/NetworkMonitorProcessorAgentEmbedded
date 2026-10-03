@@ -27,6 +27,8 @@ int64_t nm_quantum_now_ms(void)
     return monotonic_ms;
 }
 static bool fail_task, fail_publish;
+static bool override_handshake;
+static nm_quantum_result handshake_observation;
 static yyjson_mut_doc *last_response;
 static void pause_ms(void)
 {
@@ -68,6 +70,8 @@ nm_tls_inspection nm_tls_inspect(const nm_tls_inspection_request *request)
     assert(!strcmp(request->host, "example.com"));
     if (request->mode == NM_TLS_INSPECT_HANDSHAKE) {
         monotonic_ms += 10;
+        if (override_handshake)
+            return (nm_tls_inspection){.observation = handshake_observation};
         nm_tls_inspection result = {.observation.outcome = NM_QUANTUM_OK};
         snprintf(result.observation.group, sizeof(result.observation.group), "%s",
                  request->group ? request->group : "X25519MLKEM768");
@@ -338,6 +342,28 @@ int main(void)
                                          &connect_error));
     assert(nm_quantum_connect_cmd_parse("--target example.com", &connect, &connect_error));
     assert(connect.count == 6);
+    override_handshake = true;
+    const nm_quantum_outcome failures[] = {NM_QUANTUM_ERROR, NM_QUANTUM_NEGATIVE,
+                                         NM_QUANTUM_LOCAL_FAILURE};
+    for (size_t i = 0; i < sizeof(failures) / sizeof(*failures); ++i) {
+        handshake_observation = (nm_quantum_result){.outcome = failures[i]};
+        snprintf(handshake_observation.error_message, sizeof(handshake_observation.error_message),
+                 "record layer version error");
+        connected = nm_quantum_connect_cmd_run(&connect, NULL);
+        assert(!connected.success && connected.output);
+        assert(strstr(connected.output, "Quantum-safe handshake failed. Reasons:"));
+        assert(strstr(connected.output, "record layer version error; group=none"));
+        assert(!strstr(connected.output, "algorithms supported"));
+        free(connected.output);
+    }
+    const nm_quantum_outcome interruptions[] = {NM_QUANTUM_TIMEOUT, NM_QUANTUM_CANCELLED};
+    for (size_t i = 0; i < sizeof(interruptions) / sizeof(*interruptions); ++i) {
+        handshake_observation = (nm_quantum_result){.outcome = interruptions[i]};
+        connected = nm_quantum_connect_cmd_run(&connect, NULL);
+        assert(!connected.success && strstr(connected.output, "canceled or timed out"));
+        free(connected.output);
+    }
+    override_handshake = false;
     atomic_bool canceled = true;
     connected = nm_quantum_connect_cmd_run(&connect, &canceled);
     assert(!connected.success && strstr(connected.output, "canceled"));

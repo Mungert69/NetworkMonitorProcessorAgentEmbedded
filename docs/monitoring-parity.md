@@ -54,6 +54,15 @@ overrides are supported, while scan-response-only fields are unavailable in
 passive mode. The bounded listen message is an embedded adaptation rather than
 byte-for-byte .NET output parity.
 
+Victron metric readings use five fixed `PingInfo.Status` labels: `BLE pv_power`,
+`BLE battery_voltage`, `BLE battery_current`, `BLE load_current`, and
+`BLE yield_today`, matching the corrected .NET endpoint. Metric aliases resolve
+to these same labels. The selected reading remains in `PingInfo.RoundTripTime`
+with its existing scaling; readable measurements remain in the monitor
+diagnostics. Never append measurements to `PingInfo.Status`: the backend interns
+each distinct status in a table with unsigned 16-bit IDs. Older firmware/.NET
+builds included measurements in the status and could exhaust that table.
+
 The oracle in `tests/dotnet` compiles linked original model files and produces
 committed fixtures with source hashes. It does not recreate model declarations.
 State-machine expectations are traced to the methods above; they are not all

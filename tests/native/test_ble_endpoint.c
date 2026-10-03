@@ -139,12 +139,11 @@ static void reset_packets(void)
     now_us = 0; packet_count = next_packet = 0; scanner_unavailable = false;
     memset(packets, 0, sizeof(packets));
 }
-static void add_victron(const uint8_t key[16], uint8_t record_type)
+static void add_victron_reading(const uint8_t key[16], uint8_t record_type, const uint8_t plain[12])
 {
     assert(packet_count < 4);
     nm_ble_advertisement *item = &packets[packet_count++];
     snprintf(item->address, sizeof(item->address), "AA:BB:CC:DD:EE:FF");
-    uint8_t plain[12] = {0, 0, 0xd2, 0x04, 0x19, 0, 0x2c, 0x01, 0x7b, 0, 0x1e, 0};
     uint8_t counter[16] = {0x34, 0x12}, stream[16];
     psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
     psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
@@ -165,10 +164,14 @@ static void add_victron(const uint8_t key[16], uint8_t record_type)
     for (size_t i = 0; i < 12; ++i) item->data[8 + i] = plain[i] ^ stream[i];
     item->data_length = 20;
 }
+static void add_victron(const uint8_t key[16], uint8_t record_type)
+{
+    const uint8_t plain[12] = {0, 0, 0xd2, 0x04, 0x19, 0, 0x2c, 0x01, 0x7b, 0, 0x1e, 0};
+    add_victron_reading(key, record_type, plain);
+}
 static void test_victron(void)
 {
-    static const uint8_t key[16] = {0xa0, 1, 2, 3, 4, 5, 6, 7,
-                                    8, 9, 10, 11, 12, 13, 14, 15};
+    static const uint8_t key[16] = {0xa0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
     reset_packets();
     add_victron(key, 0x02); /* VeSmart: must be ignored, not host-down or success. */
     add_victron(key, 0x01);
@@ -176,7 +179,7 @@ static void test_victron(void)
         .Password = "A00102030405060708090A0B0C0D0E0F",
         .Args = "--format victron --metric pv_power", .Timeout = 100};
     nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
-    assert(result.ok && !strcmp(result.status, "BLE pv_power=123W"));
+    assert(result.ok && !strcmp(result.status, "BLE pv_power"));
     assert(result.elapsed_ms == 123 && strstr(result.message, "PV power: 123 W"));
     assert(next_packet == 2);
     reset_packets();
@@ -317,7 +320,7 @@ static void test_service_and_raw_override(void)
     monitor.Password = "A00102030405060708090A0B0C0D0E0F";
     monitor.Args = args;
     result = nm_endpoint_check_ble(&monitor, 100);
-    assert(result.ok && !strcmp(result.status, "BLE pv_power=123W"));
+    assert(result.ok && !strcmp(result.status, "BLE pv_power"));
     assert(next_packet == 0);
     monitor.Address = NULL;
     monitor.EndPointType = "blebroadcastlisten";
@@ -329,9 +332,62 @@ static void test_service_and_raw_override(void)
     assert(strstr(result.detail_message, "Payload (raw_input): AABBCC"));
     nm_esp_result_release(&result);
 }
+static void test_changing_metric_readings(void)
+{
+    static const uint8_t key[16] = {0xa0, 1, 2, 3, 4, 5, 6, 7,
+                                    8, 9, 10, 11, 12, 13, 14, 15};
+    const uint8_t readings[][12] = {{0, 0, 0x57, 0x05, 25, 0, 0x2c, 0x01, 123, 0, 30, 0},
+                                    {0, 0, 0x58, 0x05, 26, 0, 0x2d, 0x01, 0xc8, 0x01, 31, 0}};
+    const struct {
+        const char *metric, *status;
+        unsigned values[2];
+    } cases[] = {{"pv_power", "BLE pv_power", {123, 456}},
+                 {"pvpower", "BLE pv_power", {123, 456}},
+                 {"pv", "BLE pv_power", {123, 456}},
+                 {"battery_voltage", "BLE battery_voltage", {1367, 1368}},
+                 {"battery_voltage_v", "BLE battery_voltage", {1367, 1368}},
+                 {"battery_v", "BLE battery_voltage", {1367, 1368}},
+                 {"battery_current", "BLE battery_current", {25, 26}},
+                 {"battery_current_a", "BLE battery_current", {25, 26}},
+                 {"battery_a", "BLE battery_current", {25, 26}},
+                 {"yield_today", "BLE yield_today", {300, 301}},
+                 {"yield", "BLE yield_today", {300, 301}},
+                 {"yield_today_kwh", "BLE yield_today", {300, 301}},
+                 {"load_current", "BLE load_current", {30, 31}},
+                 {"load_current_a", "BLE load_current", {30, 31}},
+                 {"load_a", "BLE load_current", {30, 31}}};
+    const char *details[] = {
+        "Battery voltage: 13.67 V; Battery current: 2.5 A; Yield today: 3.00 kWh; PV power: 123 W",
+        "Battery voltage: 13.68 V; Battery current: 2.6 A; Yield today: 3.01 kWh; PV power: 456 W"};
+    for (size_t i = 0; i < sizeof(cases) / sizeof(*cases); ++i) {
+        char arguments[96];
+        int written =
+            snprintf(arguments, sizeof(arguments), "--format victron --metric %s", cases[i].metric);
+        assert(written > 0 && (size_t)written < sizeof(arguments));
+        nm_monitor_record monitor = {.Address = "AA:BB:CC:DD:EE:FF",
+                                     .EndPointType = "blebroadcast",
+                                     .Password = "A00102030405060708090A0B0C0D0E0F",
+                                     .Args = arguments,
+                                     .Timeout = 100};
+        for (size_t sample = 0; sample < 2; ++sample) {
+            reset_packets();
+            add_victron_reading(key, 0x01, readings[sample]);
+            nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
+            assert(result.ok && !strcmp(result.status, cases[i].status));
+            assert(result.elapsed_ms == cases[i].values[sample]);
+            assert(strstr(result.message, details[sample]));
+            nm_esp_result_release(&result);
+        }
+    }
+}
+
 int main(void)
 {
-    test_victron(); test_listen(); test_aes_vectors(); test_service_and_raw_override();
+    test_victron();
+    test_listen();
+    test_aes_vectors();
+    test_service_and_raw_override();
+    test_changing_metric_readings();
     puts("BLE endpoint/decryption tests passed");
     return 0;
 }

@@ -37,6 +37,12 @@ typedef struct {
  X(int32_t,ID,I32) X(int32_t,MonitorPingInfoID,I32) X(int32_t,DownCount,I32) \
  X(bool,AlertFlag,BOOL) X(bool,AlertSent,BOOL) X(bool,IsUp,NBOOL) \
  X(char *,EventTime,STRING) X(char *,Message,STRING)
+/* PingInfo.Status must be a fixed category label: the backend interns each
+ * distinct string in StatusList using a finite uint16_t StatusID space.
+ * Never append measurements, addresses, timestamps, payloads or variable error
+ * details. Use "BLE battery_voltage", not "BLE battery_voltage=13.67V".
+ * Keep changing diagnostics in monitor messages and retain the endpoint's
+ * existing numeric sample/scaling in RoundTripTime. Applies to all endpoints. */
 #define NM_PING_FIELDS(X) \
  X(uint64_t,ID,U64) X(int32_t,MonitorPingInfoID,I32) X(uint32_t,DateSentInt,U32) \
  X(uint16_t,RoundTripTime,NU16) X(uint16_t,StatusID,U16) X(int32_t,RoundTripTimeInt,I32) \

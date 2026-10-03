@@ -515,26 +515,17 @@ static bool apply_victron(nm_esp_result *result, byte_span payload, const char *
     }
     if (label) {
         result->elapsed_ms = sample;
-        if (!strcmp(label, "battery_voltage"))
-            snprintf(result->status, sizeof(result->status), "BLE battery_voltage=%.2fV",
-                     battery_voltage_raw / 100.0);
-        else if (!strcmp(label, "battery_current"))
-            snprintf(result->status, sizeof(result->status), "BLE battery_current=%.1fA",
-                     battery_current_raw / 10.0);
-        else if (!strcmp(label, "yield_today"))
-            snprintf(result->status, sizeof(result->status), "BLE yield_today=%.2fkWh",
-                     yield_raw / 100.0);
-        else if (!strcmp(label, "load_current"))
-            snprintf(result->status, sizeof(result->status), "BLE load_current=%.1fA",
-                     sample / 10.0);
-        else
-            snprintf(result->status, sizeof(result->status), "BLE pv_power=%uW", pv_power);
+        /* PingInfo.Status is interned in the backend's ushort status table.
+         * Measurements belong in the numeric sample and monitor diagnostics. */
+        snprintf(result->status, sizeof(result->status), "BLE %s", label);
     }
-    if (!label) snprintf(result->status, sizeof(result->status), "BLE broadcast received");
+    if (!label)
+        snprintf(result->status, sizeof(result->status), "BLE broadcast received");
     snprintf(result->message, sizeof(result->message),
-             "Battery voltage: %.2f V; Battery current: %.1f A; Yield today: %.2f kWh; PV power: %u W; Device state: %u; Charger error: %u",
-             battery_voltage_raw / 100.0, battery_current_raw / 10.0,
-             yield_raw / 100.0, pv_power, plain[0], plain[1]);
+             "Battery voltage: %.2f V; Battery current: %.1f A; Yield today: %.2f kWh; PV power: "
+             "%u W; Device state: %u; Charger error: %u",
+             battery_voltage_raw / 100.0, battery_current_raw / 10.0, yield_raw / 100.0, pv_power,
+             plain[0], plain[1]);
     return true;
 }
 
