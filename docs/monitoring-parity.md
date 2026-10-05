@@ -521,3 +521,24 @@ These are distribution regression tests, not a promise of balanced buckets for
 every possible ID selection. Like .NET, daily scheduling distributes hosts into
 UTC time slots, not evenly spaced instants within each slot. The stable FNV hash
 does not reproduce .NET's process-seeded hash or its exact assigned slots.
+
+## Optional physical measurement limits
+
+Host `LowThreshold` / `HighThreshold` are nullable physical-unit limits. Both
+execution paths compare successful samples after applying the selected encoding's
+scale and offset. A pending `MeasurementBreach` is immutable owned JSON in the
+runtime model and is forwarded through the existing signed status-alert message.
+It persists until the existing reset; it does not turn a successful probe into a
+failure. Configuration changes clear pending breaches. Missing limits disable
+comparison; equal bounds do not breach; failed samples (65535) are excluded.
+Limits must be finite and low must be below high when both are configured.
+
+Before deployment, apply Data migration `20261005192550_HostMeasurementAlertLimits`
+and rebuild all consumers of signed shared DTOs together, including ML. ML
+algorithms are unchanged. Build this firmware with `bash tools/build-firmware.sh`;
+building does not flash a board. Validate with sanitizer-enabled native tests
+(`ctest --test-dir build-tests --output-on-failure`) and
+`bash tests/dotnet/generate.sh --check`. The state-adapter test covers physical
+negative current, both execution paths, pending breach transport, reset and
+retrigger. Backend rollout details are also recorded in the Data repository
+under `tools/measurement-alerts.md`.

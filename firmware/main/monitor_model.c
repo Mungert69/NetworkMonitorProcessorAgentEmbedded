@@ -7,6 +7,7 @@
 #include "monitor_schedule_typed.h"
 #include "nm_json.h"
 #include <limits.h>
+#include <float.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,6 +108,29 @@ static bool fill(nm_model *m, nm_monitor_record *info, const nm_monitor_record *
 {
     bool fresh = !nm_record_has(&info->base, NM_M_MonitorIPID);
     MSET(info, ID, host->ID);
+    bool changed_limits =
+        info->LowThreshold != host->LowThreshold || info->HighThreshold != host->HighThreshold ||
+        nm_record_null(&info->base, NM_M_LowThreshold) !=
+            nm_record_null(&host->base, NM_M_LowThreshold) ||
+        nm_record_null(&info->base, NM_M_HighThreshold) !=
+            nm_record_null(&host->base, NM_M_HighThreshold) ||
+        (info->EndPointType && host->EndPointType &&
+         strcmp(info->EndPointType, host->EndPointType)) ||
+        strcmp(info->Args ? info->Args : "", host->Args ? host->Args : "") ||
+        strcmp(info->Username ? info->Username : "", host->Username ? host->Username : "");
+    if (fresh || changed_limits) {
+        nm_extension_release(info->MeasurementBreach);
+        info->MeasurementBreach = NULL;
+        nm_record_mark(&info->base, NM_M_MeasurementBreach, true);
+    }
+    info->LowThreshold = host->LowThreshold;
+    info->HighThreshold = host->HighThreshold;
+    nm_record_mark(&info->base, NM_M_LowThreshold,
+                   !nm_record_has(&host->base, NM_M_LowThreshold) ||
+                       nm_record_null(&host->base, NM_M_LowThreshold));
+    nm_record_mark(&info->base, NM_M_HighThreshold,
+                   !nm_record_has(&host->base, NM_M_HighThreshold) ||
+                       nm_record_null(&host->base, NM_M_HighThreshold));
     MSET(info, MonitorIPID, host->ID);
     MSET(info, MonitorPingInfoID, host->ID);
     TRY(MSTR(info, AppID, app));
@@ -396,6 +420,9 @@ bool nm_model_alert(nm_model *m, const char *operation, yyjson_mut_val *ids, con
             SSET(s, AlertFlag, false);
             SSET(s, AlertSent, false);
             SSET(s, DownCount, 0);
+            nm_extension_release(info->MeasurementBreach);
+            info->MeasurementBreach = NULL;
+            nm_record_mark(&info->base, NM_M_MeasurementBreach, true);
             MSET(info, IsDirtyDownCount, true);
             if (info->EndPointType && !strcmp(info->EndPointType, "sitehash"))
                 TRY(MSTR(info, SiteHash, NULL));
@@ -434,6 +461,50 @@ bool nm_model_user_event(nm_model *m, yyjson_mut_val *event)
     m->flow = copy;
     return true;
 }
+bool nm_model_measurement_alert(nm_model *m, int32_t id, uint16_t sample, double scale,
+                                double offset, const char *unit, const char *when)
+{
+    nm_monitor_record *info = edit_info(m, id);
+    TRY(info);
+    if (info->MeasurementBreach || sample == UINT16_MAX)
+        return true;
+    bool low = nm_record_has(&info->base, NM_M_LowThreshold) &&
+               !nm_record_null(&info->base, NM_M_LowThreshold);
+    bool high = nm_record_has(&info->base, NM_M_HighThreshold) &&
+                !nm_record_null(&info->base, NM_M_HighThreshold);
+    if ((!low && !high) || !isfinite(scale) || scale <= 0 || !isfinite(offset))
+        return true;
+    if ((low && !isfinite(info->LowThreshold)) || (high && !isfinite(info->HighThreshold)) ||
+        (low && high && info->LowThreshold >= info->HighThreshold))
+        return true;
+    double value = sample * scale + offset;
+    if (!isfinite(value))
+        return true;
+    double tolerance = 8 * DBL_EPSILON * (fabs(sample * scale) + fabs(offset) + fabs(value));
+    const char *direction = low && value < info->LowThreshold - tolerance     ? "low"
+                            : high && value > info->HighThreshold + tolerance ? "high"
+                                                                              : NULL;
+    if (!direction)
+        return true;
+    yyjson_mut_doc *doc = nm_json_new();
+    TRY(doc);
+    yyjson_mut_val *breach = yyjson_mut_obj(doc);
+    bool ok = breach && yyjson_mut_obj_add_str(doc, breach, "Direction", direction) &&
+              yyjson_mut_obj_add_real(doc, breach, "Value", value) &&
+              yyjson_mut_obj_add_real(doc, breach, "Limit",
+                                      !strcmp(direction, "low") ? info->LowThreshold
+                                                                : info->HighThreshold) &&
+              yyjson_mut_obj_add_str(doc, breach, "Unit", unit ? unit : "raw value") &&
+              yyjson_mut_obj_add_str(doc, breach, "ObservedAt", when);
+    nm_extension *encoded = ok ? nm_extension_create(breach) : NULL;
+    yyjson_mut_doc_free(doc);
+    TRY(encoded);
+    info->MeasurementBreach = encoded;
+    nm_record_mark(&info->base, NM_M_MeasurementBreach, false);
+    m->changed = true;
+    return true;
+}
+
 bool nm_model_probe(nm_model *m, int32_t id, bool up, uint16_t rtt, const char *status,
                     const char *message, const char *when, uint32_t date)
 {

@@ -19,20 +19,33 @@ typedef struct {
     nm_extension *extension;
 } nm_record;
 
-#define NM_MONITOR_FIELDS(X) \
- X(int32_t,ID,I32) X(int32_t,MonitorIPID,I32) X(int32_t,MonitorPingInfoID,I32) \
- X(int32_t,DataSetID,I32) X(int32_t,Timeout,I32) X(uint16_t,Port,U16) \
- X(int32_t,SkipCycles,NI32) X(bool,Enabled,BOOL) X(bool,IsEnabled,BOOL) \
- X(bool,IsEmailVerified,BOOL) X(bool,Delete,BOOL) X(bool,DeleteAll,BOOL) X(bool,IsSwapping,BOOL) \
- X(int32_t,PacketsSent,I32) X(int32_t,PacketsRecieved,I32) X(int32_t,PacketsLost,I32) \
- X(float,PacketsLostPercentage,FLOAT) X(float,RoundTripTimeAverage,FLOAT) \
- X(int32_t,RoundTripTimeMinimum,I32) X(int32_t,RoundTripTimeMaximum,I32) X(int32_t,RoundTripTimeTotal,I32) \
- X(bool,IsArchived,BOOL) X(bool,IsDirtyDownCount,BOOL) \
- X(char *,AppID,STRING) X(char *,Address,STRING) X(char *,EndPointType,STRING) \
- X(char *,Host,STRING) X(char *,UserID,STRING) X(char *,Username,STRING) X(char *,Password,STRING) \
- X(char *,Args,STRING) X(char *,AddUserEmail,STRING) X(char *,Status,STRING) \
- X(char *,DateStarted,STRING) X(char *,DateEnded,STRING) X(char *,SiteHash,STRING) \
- X(nm_status_record *,MonitorStatus,STATUS)
+#define NM_MONITOR_FIELDS(X)                                                                       \
+    X(int32_t, ID, I32)                                                                            \
+    X(int32_t, MonitorIPID, I32) X(int32_t, MonitorPingInfoID, I32) X(int32_t, DataSetID, I32)     \
+        X(int32_t, Timeout, I32) X(uint16_t, Port, U16) X(double, LowThreshold, NDOUBLE) X(        \
+            double, HighThreshold, NDOUBLE) X(nm_extension *, MeasurementBreach, JSON)             \
+            X(int32_t, SkipCycles, NI32) X(bool, Enabled, BOOL) X(bool, IsEnabled, BOOL) X(        \
+                bool, IsEmailVerified, BOOL) X(bool, Delete, BOOL) X(bool, DeleteAll, BOOL)        \
+                X(bool, IsSwapping, BOOL) X(int32_t, PacketsSent, I32) X(                          \
+                    int32_t, PacketsRecieved, I32) X(int32_t, PacketsLost, I32)                    \
+                    X(float, PacketsLostPercentage, FLOAT) X(float, RoundTripTimeAverage, FLOAT)   \
+                        X(int32_t, RoundTripTimeMinimum,                                           \
+                          I32) X(int32_t, RoundTripTimeMaximum,                                    \
+                                 I32) X(int32_t, RoundTripTimeTotal, I32)                          \
+                            X(bool, IsArchived, BOOL) X(bool, IsDirtyDownCount, BOOL)              \
+                                X(char *, AppID, STRING) X(char *, Address, STRING)                \
+                                    X(char *, EndPointType, STRING)                                \
+                                        X(char *, Host, STRING)                                    \
+                                            X(char *, UserID, STRING) X(char *, Username, STRING)  \
+                                                X(char *, Password, STRING) X(char *,              \
+                                                                              Args, STRING)        \
+                                                    X(char *, AddUserEmail, STRING)                \
+                                                        X(char *, Status, STRING)                  \
+                                                            X(char *, DateStarted, STRING)         \
+                                                                X(char *, DateEnded, STRING)       \
+                                                                    X(char *, SiteHash, STRING)    \
+                                                                        X(nm_status_record *,      \
+                                                                          MonitorStatus, STATUS)
 #define NM_STATUS_FIELDS(X) \
  X(int32_t,ID,I32) X(int32_t,MonitorPingInfoID,I32) X(int32_t,DownCount,I32) \
  X(bool,AlertFlag,BOOL) X(bool,AlertSent,BOOL) X(bool,IsUp,NBOOL) \
@@ -113,6 +126,10 @@ bool nm_model_ack(nm_model *, yyjson_mut_val *);
 bool nm_model_alert(nm_model *, const char *, yyjson_mut_val *, const char *);
 bool nm_model_user_event(nm_model *, yyjson_mut_val *);
 bool nm_model_reconcile(nm_model *, const char *, const char *);
+/* Metadata strings are borrowed and copied into a latched breach. Call on a
+ * disposable candidate; allocation failure must abort that candidate. */
+bool nm_model_measurement_alert(nm_model *, int32_t id, uint16_t sample, double scale,
+                                double offset, const char *unit, const char *when);
 bool nm_model_probe(nm_model *, int32_t id, bool up, uint16_t rtt,
                     const char *status, const char *message, const char *when, uint32_t date);
 #endif

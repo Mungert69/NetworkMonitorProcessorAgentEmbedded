@@ -14,6 +14,7 @@
  *   -lbrotlienc -lbrotlidec -lbrotlicommon -lcrypto -lm -o /tmp/test_state_adapter
  */
 #include "nm_esp.h"
+#include <math.h>
 #include "message_publish.h"
 #include "nm_probe_pool.h"
 #include "esp_random.h"
@@ -1225,6 +1226,51 @@ static void test_registration_handoff_snapshot(void)
 
 /* Actual sequential/concurrent state publication: durations scale once,
  * sensor values bypass timing scale, failure retains 65535 and counters. */
+static void test_measurement_limits(void)
+{
+    for (unsigned concurrent = 0; concurrent < 2; ++concurrent) {
+        reset();
+        nm_esp_state *s = initialized(
+            "{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"device\",\"EndPointType\":\"blebroadcast\","
+            "\"Enabled\":true,\"LowThreshold\":-1,\"HighThreshold\":2}]}");
+        if (concurrent)
+            nm_esp_state_set_probe_executor(s, fake_executor_new(1, false, false));
+        endpoint_result.has_sample = true;
+        endpoint_result.sample = 32757;
+        endpoint_result.measurement_scale = .1;
+        endpoint_result.measurement_offset = -3276.8;
+        endpoint_result.measurement_unit = "A";
+        CHECK(cycle(s));
+        CHECK(number(info(), "PacketsLost") == 0);
+        CHECK(yyjson_mut_is_true(GET(GET(info(), "MonitorStatus"), "IsUp")));
+        yyjson_mut_val *breach = GET(info(), "MeasurementBreach");
+        CHECK(breach && !strcmp(yyjson_mut_get_str(GET(breach, "Direction")), "low"));
+        CHECK(fabs(yyjson_mut_get_num(GET(breach, "Value")) + 1.1) < 1e-9);
+        bool found = false;
+        for (size_t m = 0; m < message_count; ++m) {
+            if (strcmp(messages[m].topic, "processor/out/status-alerts"))
+                continue;
+            yyjson_mut_doc *wire = decode(m);
+            CHECK(GET(AT(GET(ROOT(wire), "MonitorStatusAlerts"), 0), "MeasurementBreach"));
+            found = true;
+            yyjson_mut_doc_free(wire);
+        }
+        CHECK(found);
+        endpoint_result.sample = 32768;
+        CHECK(cycle(s));
+        CHECK(yyjson_mut_is_obj(GET(info(), "MeasurementBreach")));
+        yyjson_mut_doc *request = parse("[7]");
+        CHECK(nm_esp_state_alert(s, &config, &broker, "processorResetAlerts", ROOT(request)));
+        yyjson_mut_doc_free(request);
+        CHECK(cycle(s)); /* Commands update RAM; the next cycle persists the reset. */
+        CHECK(yyjson_mut_is_null(GET(info(), "MeasurementBreach")));
+        endpoint_result.sample = 32799;
+        CHECK(cycle(s));
+        CHECK(yyjson_mut_equals_str(GET(GET(info(), "MeasurementBreach"), "Direction"), "high"));
+        nm_esp_state_free(s);
+    }
+}
+
 static void test_measurement_samples(void)
 {
     const char *types[] = {"http", "nmap", "blebroadcastlisten", "blebroadcast"};
@@ -1273,7 +1319,8 @@ int main(int argc, char **argv)
     const struct {
         const char *name;
         void (*run)(void);
-    } tests[] = {{"measurement_samples", test_measurement_samples},
+    } tests[] = {{"measurement_limits", test_measurement_limits},
+                 {"measurement_samples", test_measurement_samples},
                  {"base64", test_base64},
                  {"registration_handoff_snapshot", test_registration_handoff_snapshot},
                  {"commands_ram_only", test_commands_ram_only},

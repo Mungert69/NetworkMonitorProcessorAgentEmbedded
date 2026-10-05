@@ -400,8 +400,8 @@ static bool publish_alerts(nm_esp_state *s, const nm_model *model, uint64_t gene
                        *alert = nm_record_encode(doc, &status->base),
                        *info = nm_record_encode(doc, &record->base);
         bool built = alert && info;
-        const char *fields[] = {"AppID",  "Address",      "EndPointType",   "Timeout",
-                                "UserID", "AddUserEmail", "IsEmailVerified"};
+        const char *fields[] = {"AppID",  "Address",      "EndPointType",    "Timeout",
+                                "UserID", "AddUserEmail", "IsEmailVerified", "MeasurementBreach"};
         for (size_t a = 0; a < sizeof(fields) / sizeof(fields[0]); ++a)
             built = built && clone_field(doc, alert, info, fields[a]);
         yyjson_mut_obj_remove_key(alert, "ID");
@@ -439,6 +439,20 @@ static double schedule_random(void *context)
 {
     (void)context;
     return (double)esp_random() / 4294967296.0;
+}
+static bool record_limit_breach(nm_model *model, int32_t id, const char *type,
+                                const nm_esp_result *result, uint16_t sample, const char *when)
+{
+    if (!result->ok)
+        return true;
+    return nm_model_measurement_alert(
+        model, id, sample,
+        result->measurement_scale > 0 ? result->measurement_scale
+                                      : nm_endpoint_duration_scale(type),
+        result->measurement_offset,
+        result->measurement_unit ? result->measurement_unit
+                                 : (type && !strcmp(type, "blebroadcast") ? "raw value" : "ms"),
+        when);
 }
 /* Apply one finished probe to a fresh candidate and commit it. Returns true
  * when a reply was consumed, so the caller can decrement its own accounting,
@@ -482,6 +496,9 @@ static bool drain_probe(nm_esp_state *s, bool *cycle_ok)
             *reply.result.status ? reply.result.status : "Unknown probe status",
             reply.result.detail_message ? reply.result.detail_message : reply.result.message, when,
             date);
+        if (applied)
+            applied = record_limit_breach(&next, reply.monitor_id, info->EndPointType,
+                                          &reply.result, rtt, when);
     }
     if (!applied) {
         nm_model_close(&next);
@@ -550,6 +567,8 @@ static bool run_sequential(nm_esp_state *s, const nm_esp_config *config)
             valid = nm_model_probe(
                 &next, id, result.ok, rtt, *result.status ? result.status : "Unknown probe status",
                 result.detail_message ? result.detail_message : result.message, when, date);
+            if (valid)
+                valid = record_limit_breach(&next, id, type, &result, rtt, when);
             nm_esp_result_release(&result);
         }
         /* Never process commands against an uncommitted probe/schedule candidate. */

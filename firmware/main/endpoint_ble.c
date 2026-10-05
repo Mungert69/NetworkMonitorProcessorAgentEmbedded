@@ -826,6 +826,9 @@ nm_esp_result nm_endpoint_check_ble(const nm_monitor_record *monitor, unsigned t
                                  metric);
                         return result;
                     }
+                    result.measurement_scale = encoding->scale;
+                    result.measurement_offset = encoding->offset;
+                    result.measurement_unit = encoding->unit;
                     result.sample = sample;
                     result.has_sample = true;
                     snprintf(result.status, sizeof(result.status), "BLE v2:%s:%s", decoder->format,
@@ -841,6 +844,8 @@ nm_esp_result nm_endpoint_check_ble(const nm_monitor_record *monitor, unsigned t
                                  "Implicit BLE pv_power is unavailable or outside 0..65534");
                         return result;
                     }
+                    result.measurement_scale = 1;
+                    result.measurement_unit = "raw value";
                     result.sample = (uint16_t)sample;
                     result.has_sample = true;
                     snprintf(result.status, sizeof(result.status), "BLE pv_power");

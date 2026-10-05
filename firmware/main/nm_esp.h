@@ -46,6 +46,8 @@ typedef struct {
     unsigned elapsed_ms; /* Actual elapsed time, including for sensor probes. */
     uint16_t sample;     /* Encoded numeric reading when has_sample is true. */
     bool has_sample;
+    double measurement_scale, measurement_offset;
+    const char *measurement_unit; /* Borrowed immutable catalogue data. */
     char status[64];
     char message[256];
     /* Optional PSRAM-owned long diagnostic, transferred through the probe

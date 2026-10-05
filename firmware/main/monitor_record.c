@@ -18,7 +18,21 @@
         if (!(x))                                                                                  \
             return false;                                                                          \
     } while (0)
-typedef enum { I32, NI32, U16, NU16, U32, U64, BOOL, NBOOL, FLOAT, STRING, STATUS } field_type;
+typedef enum {
+    I32,
+    NI32,
+    U16,
+    NU16,
+    U32,
+    U64,
+    BOOL,
+    NBOOL,
+    FLOAT,
+    NDOUBLE,
+    JSON,
+    STRING,
+    STATUS
+} field_type;
 typedef struct {
     const char *name;
     size_t offset;
@@ -155,6 +169,8 @@ void nm_record_release(nm_record *r)
         void *p = (char *)r + s->fields[i].offset;
         if (s->fields[i].type == STRING)
             free(*(char **)p);
+        if (s->fields[i].type == JSON)
+            nm_extension_release(*(nm_extension **)p);
         if (s->fields[i].type == STATUS)
             nm_record_release((nm_record *)*(nm_status_record **)p);
     }
@@ -182,6 +198,14 @@ nm_record *nm_record_copy(const nm_record *r)
         case STRING:
             if (*(char *const *)src && !(*(char **)dst = nm_bulk_strdup(*(char *const *)src)))
                 goto fail;
+            break;
+        case JSON:
+            if (*(nm_extension *const *)src &&
+                !(*(nm_extension **)dst = nm_extension_retain(*(nm_extension *const *)src)))
+                goto fail;
+            break;
+        case NDOUBLE:
+            *(double *)dst = *(const double *)src;
             break;
         case STATUS:
             if (*(nm_status_record *const *)src &&
@@ -269,7 +293,8 @@ nm_record *nm_record_decode(nm_record_kind kind, yyjson_mut_val *value)
         uint64_t u;
         nm_record_mark(r, (unsigned)i, null);
         if (null) {
-            if (f->type != STRING && f->type != NI32 && f->type != NU16 && f->type != NBOOL)
+            if (f->type != STRING && f->type != NI32 && f->type != NU16 && f->type != NBOOL &&
+                f->type != NDOUBLE && f->type != JSON)
                 goto fail_rest;
             continue;
         }
@@ -298,6 +323,15 @@ nm_record *nm_record_decode(nm_record_kind kind, yyjson_mut_val *value)
             if (!yyjson_mut_is_bool(v))
                 goto fail_rest;
             *(bool *)dst = yyjson_mut_get_bool(v);
+            break;
+        case JSON:
+            if (!yyjson_mut_is_obj(v) || !(*(nm_extension **)dst = nm_extension_create(v)))
+                goto fail_rest;
+            break;
+        case NDOUBLE:
+            if (!yyjson_mut_is_num(v) || !isfinite(yyjson_mut_get_num(v)))
+                goto fail_rest;
+            *(double *)dst = yyjson_mut_get_num(v);
             break;
         case FLOAT:
             if (!yyjson_mut_is_num(v) || !isfinite(yyjson_mut_get_num(v)))
@@ -365,6 +399,13 @@ yyjson_mut_val *nm_record_encode(yyjson_mut_doc *doc, const nm_record *r)
             case BOOL:
             case NBOOL:
                 v = yyjson_mut_bool(doc, *(const bool *)p);
+                break;
+            case JSON:
+                v = *(nm_extension *const *)p ? nm_extension_decode(doc, *(nm_extension *const *)p)
+                                              : yyjson_mut_null(doc);
+                break;
+            case NDOUBLE:
+                v = yyjson_mut_real(doc, *(const double *)p);
                 break;
             case FLOAT:
                 v = yyjson_mut_real(doc, *(const float *)p);
