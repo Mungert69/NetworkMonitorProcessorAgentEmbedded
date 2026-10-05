@@ -62,9 +62,12 @@ A configured nonzero port scans only that port. Port zero scans 22
 project-owned common TCP ports (not a copied Nmap port/probe database). It
 reports open ports with conservative port/service-name hints. Its report is
 capped at 32768 bytes and 256 lines; allocation/socket exhaustion returns
-`NM_PROBE_LOCAL_FAILURE`. The runtime budget mirrors the .NET 10x extension,
-with a hard 120-second ceiling; common-port connection attempts use 250 ms
-slices within that overall budget.
+`NM_PROBE_LOCAL_FAILURE`. The endpoint layer applies the .NET 10x timeout
+extension once; the runner receives that exact total budget. The former
+120-second runner ceiling and hidden second extension have been removed.
+Common-port connection attempts retain 250 ms slices within the overall budget.
+Successful endpoint durations use scale 10; standalone command reports keep
+actual elapsed milliseconds. See [the endpoint audit](endpoint-parity-audit.md).
 
 The monitor endpoint result uses the .NET user-facing `Port/s open` /
 `Port/s closed` status strings and an Nmap-shaped summary. It does not perform

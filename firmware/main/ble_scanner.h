@@ -1,6 +1,7 @@
 #ifndef NM_BLE_SCANNER_H
 #define NM_BLE_SCANNER_H
 
+#include "ble_decoder.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -16,8 +17,9 @@ typedef struct {
 
 typedef struct {
     char address[NM_BLE_ADDRESS_TEXT_SIZE]; /* Empty means any advertiser. */
-    int company; /* -1 means no manufacturer filter. */
-    bool victron_instant;
+    int company;                            /* -1 means no manufacturer filter. */
+    const nm_ble_decoder *decoder;          /* Borrowed immutable registry entry. */
+    bool has_key;
     uint8_t key_check;
 } nm_ble_filter;
 

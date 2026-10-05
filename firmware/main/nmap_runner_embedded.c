@@ -26,18 +26,8 @@ static const uint16_t fast_ports[] = {22, 53, 80, 443, 445, 1883, 8080, 8443};
 enum {
     NMAP_MAX_REPORT = 32768, /* 254 host rows including MAC/reason, in PSRAM. */
     NMAP_DEFAULT_PER_PORT_MS = 250,
-    NMAP_DISCOVERY_PER_HOST_MS = 200,
-    NMAP_MAX_SCAN_MS = 120000,
-    NMAP_DOTNET_TIMEOUT_MULTIPLIER = 10
+    NMAP_DISCOVERY_PER_HOST_MS = 200
 };
-
-static unsigned scan_budget(unsigned timeout_ms)
-{
-    uint64_t extended = (uint64_t)timeout_ms * NMAP_DOTNET_TIMEOUT_MULTIPLIER;
-    if (!extended)
-        extended = 10000;
-    return extended > NMAP_MAX_SCAN_MS ? NMAP_MAX_SCAN_MS : (unsigned)extended;
-}
 
 static void set_port(struct sockaddr *address, uint16_t port)
 {
@@ -224,7 +214,7 @@ nm_nmap_run_result nm_nmap_runner_execute(const char *const argv[], size_t argc,
     nm_nmap_scan_request request = {.host = host,
                                     .ports = configured_port ? &configured_port : NULL,
                                     .count = configured_port ? 1 : 0,
-                                    .timeout_ms = scan_budget(timeout_ms)};
+                                    .timeout_ms = timeout_ms};
     return nm_nmap_runner_scan(&request);
 }
 

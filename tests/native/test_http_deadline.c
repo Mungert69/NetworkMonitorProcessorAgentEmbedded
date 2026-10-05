@@ -46,6 +46,23 @@ int esp_crt_bundle_attach(void *config)
     (void)config;
     return 0;
 }
+static int verifier_error;
+static unsigned verified;
+int esp_crt_verify_callback(void *context, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
+{
+    (void)context;
+    (void)crt;
+    (void)depth;
+    (void)flags;
+    ++verified;
+    return verifier_error;
+}
+void mbedtls_ssl_conf_verify(void *config,
+                             int (*callback)(void *, mbedtls_x509_crt *, int, uint32_t *),
+                             void *context)
+{
+    assert(config && callback == verify_expiry && !context);
+}
 esp_http_client_transport_t esp_http_client_get_transport_type(esp_http_client_handle_t c)
 {
     assert(c);
@@ -109,7 +126,8 @@ void esp_transport_ssl_set_common_name(esp_transport_handle_t t, const char *nam
 }
 void esp_transport_ssl_crt_bundle_attach(esp_transport_handle_t t, int (*attach)(void *))
 {
-    assert(((transport *)t)->tls && attach == esp_crt_bundle_attach);
+    assert(((transport *)t)->tls &&
+           (attach == esp_crt_bundle_attach || attach == attach_expiry_policy));
 }
 int esp_transport_connect_async(esp_transport_handle_t t, const char *ip, int port, int timeout)
 {
@@ -168,6 +186,27 @@ static void release(nm_http_deadline *d)
 }
 int main(void)
 {
+    /* 2026-10-05 12:34:56 UTC: cutoff is midnight October 12, not noon. */
+    time_t epoch = 1791203696;
+    mbedtls_x509_time expiry = {2026, 10, 12, 0, 0, 0};
+    assert(!expires_within_week(&expiry, epoch));
+    expiry = (mbedtls_x509_time){2026, 10, 11, 23, 59, 59};
+    assert(expires_within_week(&expiry, epoch));
+    expiry = (mbedtls_x509_time){2027, 1, 1, 0, 0, 0};
+    assert(!expires_within_week(&expiry, epoch));
+    /* Wrap month and leap-year boundaries. */
+    assert(!expires_within_week(&(mbedtls_x509_time){2024, 3, 1, 0, 0, 0}, 1708689600));
+    mbedtls_x509_crt cert = {.valid_to = {2000, 1, 1, 0, 0, 0}};
+    uint32_t flags = 0x4;
+    assert(verify_expiry(NULL, &cert, 0, &flags) == 0);
+    assert(flags == (0x4 | MBEDTLS_X509_BADCERT_OTHER) && verified == 1);
+    flags = 0x4;
+    assert(verify_expiry(NULL, &cert, 1, &flags) == 0 && flags == 0x4);
+    verifier_error = -123;
+    flags = 0;
+    assert(verify_expiry(NULL, &cert, 0, &flags) == -123 && flags == 0);
+    verifier_error = 0;
+    assert(attach_expiry_policy((void *)1) == ESP_OK);
     const int alloc_errors[] = {MBEDTLS_ERR_SSL_ALLOC_FAILED,
                                 MBEDTLS_ERR_X509_ALLOC_FAILED,
                                 MBEDTLS_ERR_PK_ALLOC_FAILED,
@@ -242,6 +281,7 @@ int main(void)
     dns_failure = false;
     d = request();
     scheme = HTTP_TRANSPORT_OVER_SSL;
+    nm_http_deadline_check_certificate_expiry(d, true);
     assert(connect_transport(d->transport, "host.test", 80, 100) == 0);
     /* Redirect changes scheme, releases old TLS host, retains original deadline. */
     int64_t until = d->deadline_us;

@@ -30,7 +30,7 @@ typedef struct {
     const char *host;      /* Borrowed through synchronous completion. */
     const uint16_t *ports; /* NULL/count zero uses the built-in common-port set. */
     size_t count;          /* At most 64 ports. */
-    unsigned timeout_ms;   /* Exact total budget, unlike the legacy endpoint wrapper. */
+    unsigned timeout_ms;   /* Exact total budget, including the endpoint wrapper. */
     bool fast_scan;        /* Smaller project-owned port set when no explicit ports are supplied. */
     bool show_open;        /* Match --open by suppressing non-open findings. */
     bool no_ping;          /* -Pn: skip discovery and assume the target is up. */
@@ -45,17 +45,18 @@ typedef struct {
     uint32_t first_ipv4;        /* Host-order first usable address. */
     uint16_t target_count;      /* One for a hostname/IP; bounded CIDR count otherwise. */
     bool has_ipv4_range;
-    bool arp_only;          /* Otherwise local IPv4 uses ARP; off-link uses ICMP. */
+    bool arp_only; /* Otherwise local IPv4 uses ARP; off-link uses ICMP. */
     bool show_reason;
     uint8_t verbosity;
-    unsigned timeout_ms;        /* Total budget shared by every target. */
+    unsigned timeout_ms; /* Total budget shared by every target. */
     const atomic_bool *cancellation;
 } nm_nmap_discovery_request;
 nm_nmap_run_result nm_nmap_runner_scan(const nm_nmap_scan_request *request);
 nm_nmap_run_result nm_nmap_runner_discover(const nm_nmap_discovery_request *request);
 
 /* argv is a bounded token vector, not a shell command string. The runner
- * accepts only the small Nmap-compatible option subset implemented here. */
+ * accepts only the small Nmap-compatible option subset implemented here.
+ * timeout_ms is the exact total budget; endpoint extension belongs to endpoints.c. */
 nm_nmap_run_result nm_nmap_runner_execute(const char *const argv[], size_t argc,
                                           unsigned timeout_ms);
 void nm_nmap_runner_result_release(nm_nmap_run_result *result);

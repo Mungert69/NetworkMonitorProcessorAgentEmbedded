@@ -90,13 +90,16 @@ def main():
     tls.load_cert_chain(ROOT / "build-http-deadline/test-cert.pem", ROOT / "build-http-deadline/test-key.pem")
     untrusted = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     untrusted.load_cert_chain(ROOT / "build-http-deadline/untrusted-cert.pem", ROOT / "build-http-deadline/untrusted-key.pem")
+    near = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    near.load_cert_chain(ROOT / "build-http-deadline/near-cert.pem", ROOT / "build-http-deadline/near-key.pem")
     names = []
     tls.set_servername_callback(lambda sock, name, context: names.append(name))
     with contextlib.ExitStack() as stack:
         servers = [stack.enter_context(Server(("192.168.4.1", port), handler)) for port, handler in
-                   ((18080, Handler), (18443, TLSHandler), (18444, HandshakeStall), (18445, TLSHandler))]
+                   ((18080, Handler), (18443, TLSHandler), (18444, HandshakeStall), (18445, TLSHandler), (18446, TLSHandler))]
         servers[1].tls = tls
         servers[3].tls = untrusted
+        servers[4].tls = near
         for server in servers:
             threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
@@ -133,6 +136,7 @@ def main():
         if any(word in line for word in ("CASE ", "HEAP ", "PROBE_MEMORY", "assert", "PASS", "panic")):
             print(line)
     assert returncode == 0 and "HTTP_DEADLINE_INTEGRATION_PASS" in output, str(log)
+    assert "HTTPS_EXPIRY_POLICY_PASS" in output, str(log)
     assert "PROBE_MEMORY_INTEGRATION_PASS" in output, str(log)
     assert "deadline.test" in names and "wrong.test" in names, names
 

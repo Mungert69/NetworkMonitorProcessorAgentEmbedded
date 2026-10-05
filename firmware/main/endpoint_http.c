@@ -28,6 +28,7 @@ nm_esp_result nm_endpoint_check_http(const char *host, const char *type, unsigne
     nm_http_deadline *deadline = nm_http_deadline_new(timeout, resolve_http);
     if (!deadline)
         return nm_endpoint_local_failure(0, "Unable to initialize HTTP deadline");
+    nm_http_deadline_check_certificate_expiry(deadline, !strcmp(type, "https"));
     /* The HTTP parser borrows a deadline-aware transport. Both are owned and
      * destroyed by this task; redirects retain the same request deadline. */
     esp_http_client_config_t config = {.url = url,

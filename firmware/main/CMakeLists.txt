@@ -20,7 +20,7 @@ idf_component_register(
         "endpoints.c" "endpoint_common.c" "endpoint_dns.c" "endpoint_dns_task.c" "endpoint_icmp.c"
         "endpoint_nmap.c" "nmap_runner_embedded.c" "nmap_targets.c" "nmap_arp.c"
         "service_hints.c"
-        "endpoint_tcp.c" "endpoint_http.c" "endpoint_ble.c" "http_deadline.c" "ota.c"
+        "endpoint_tcp.c" "endpoint_http.c" "endpoint_ble.c" "ble_decoder.c" "ble_crypto.c" "ble_metric.c" "ble_victron_decoder.c" "ble_victron_records.c" "ble_ruuvi_decoder.c" "ble_bthome_decoder.c" "http_deadline.c" "ota.c"
         "endpoint_quantum.c" "tls_inspection.c" "quantum_tls.c" "openssl_runner.c"
         "../../third_party/yyjson/src/yyjson.c"
     INCLUDE_DIRS "../../third_party/yyjson/src"

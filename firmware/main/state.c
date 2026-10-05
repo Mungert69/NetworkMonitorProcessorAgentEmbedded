@@ -469,17 +469,19 @@ static bool drain_probe(nm_esp_state *s, bool *cycle_ok)
         return true;
     }
     bool applied = false;
-    if (nm_model_host(&next, reply.monitor_id)) {
+    const nm_monitor_record *info = nm_model_info(&next, reply.monitor_id);
+    if (nm_model_host(&next, reply.monitor_id) && info) {
         char when[32];
         timestamp(when);
         uint32_t date = (uint32_t)((uint64_t)time(NULL) - UINT64_C(1640995200));
-        uint16_t rtt = nm_endpoint_rtt(reply.result.ok, reply.result.elapsed_ms);
+        uint16_t rtt = nm_esp_result_sample(info->EndPointType, &reply.result);
         ESP_LOGI(TAG, "probe id=%ld ok=%d elapsed_ms=%u", (long)reply.monitor_id, reply.result.ok,
                  reply.result.elapsed_ms);
-        applied = nm_model_probe(&next, reply.monitor_id, reply.result.ok, rtt,
-                                 *reply.result.status ? reply.result.status : "Unknown probe status",
-                                 reply.result.detail_message ? reply.result.detail_message : reply.result.message,
-                                 when, date);
+        applied = nm_model_probe(
+            &next, reply.monitor_id, reply.result.ok, rtt,
+            *reply.result.status ? reply.result.status : "Unknown probe status",
+            reply.result.detail_message ? reply.result.detail_message : reply.result.message, when,
+            date);
     }
     if (!applied) {
         nm_model_close(&next);
@@ -542,13 +544,12 @@ static bool run_sequential(nm_esp_state *s, const nm_esp_config *config)
                 valid = false;
                 break;
             }
-            uint16_t rtt = nm_endpoint_rtt(result.ok, result.elapsed_ms);
+            uint16_t rtt = nm_esp_result_sample(type, &result);
             ESP_LOGI(TAG, "probe id=%ld type=%s ok=%d elapsed_ms=%u", (long)id, type, result.ok,
                      result.elapsed_ms);
-            valid = nm_model_probe(&next, id, result.ok, rtt,
-                                   *result.status ? result.status : "Unknown probe status",
-                                   result.detail_message ? result.detail_message : result.message,
-                                   when, date);
+            valid = nm_model_probe(
+                &next, id, result.ok, rtt, *result.status ? result.status : "Unknown probe status",
+                result.detail_message ? result.detail_message : result.message, when, date);
             nm_esp_result_release(&result);
         }
         /* Never process commands against an uncommitted probe/schedule candidate. */

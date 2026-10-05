@@ -168,15 +168,17 @@ target_compile_definitions(test_endpoint_quantum PRIVATE _POSIX_C_SOURCE=200809L
 target_compile_options(test_endpoint_quantum PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 target_link_libraries(test_endpoint_quantum PRIVATE Threads::Threads)
 add_test(NAME native-endpoint_quantum COMMAND test_endpoint_quantum)
-add_executable(test_ble_filter tests/native/test_ble_filter.c)
-target_include_directories(test_ble_filter PRIVATE firmware/main)
+add_executable(test_ble_filter tests/native/test_ble_filter.c tests/native/ble_crypto_adapter.c firmware/main/ble_decoder.c firmware/main/ble_crypto.c firmware/main/ble_metric.c firmware/main/ble_victron_decoder.c firmware/main/ble_victron_records.c firmware/main/ble_ruuvi_decoder.c firmware/main/ble_bthome_decoder.c)
+target_include_directories(test_ble_filter PRIVATE tests/native/endpoint_stubs firmware/main)
+target_compile_definitions(test_ble_filter PRIVATE _POSIX_C_SOURCE=200809L)
+target_link_libraries(test_ble_filter PRIVATE OpenSSL::Crypto m)
 target_compile_options(test_ble_filter PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 add_test(NAME native-ble_filter COMMAND test_ble_filter)
-add_executable(test_ble_endpoint tests/native/test_ble_endpoint.c)
+add_executable(test_ble_endpoint tests/native/test_ble_endpoint.c tests/native/ble_crypto_adapter.c firmware/main/ble_decoder.c firmware/main/ble_crypto.c firmware/main/ble_metric.c firmware/main/ble_victron_decoder.c firmware/main/ble_victron_records.c firmware/main/ble_ruuvi_decoder.c firmware/main/ble_bthome_decoder.c)
 target_include_directories(test_ble_endpoint PRIVATE tests/native/endpoint_stubs firmware/main third_party/yyjson/src)
 target_compile_definitions(test_ble_endpoint PRIVATE _POSIX_C_SOURCE=200809L)
 target_compile_options(test_ble_endpoint PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
-target_link_libraries(test_ble_endpoint PRIVATE OpenSSL::Crypto)
+target_link_libraries(test_ble_endpoint PRIVATE OpenSSL::Crypto m)
 add_test(NAME native-ble_endpoint COMMAND test_ble_endpoint)
 set_tests_properties(native-endpoint_execution PROPERTIES TIMEOUT 30)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -221,3 +223,15 @@ add_test(NAME tooling COMMAND ${Python3_EXECUTABLE} -m unittest discover
   -s ${CMAKE_CURRENT_SOURCE_DIR}/tests/tooling -p test_*.py)
 # Firmware is built separately with tools/build-firmware.sh (ESP-IDF).
 # Live/backend integration tests are explicit scripts under tests/integration.
+
+# Real .NET built-in metadata and decoder vectors (no network/radio).
+add_executable(test_endpoint_contracts tests/native/test_endpoint_contracts.c
+  tests/native/ble_crypto_adapter.c firmware/main/ble_decoder.c firmware/main/ble_crypto.c
+  firmware/main/ble_metric.c firmware/main/ble_victron_decoder.c firmware/main/ble_victron_records.c
+  firmware/main/ble_ruuvi_decoder.c firmware/main/ble_bthome_decoder.c)
+target_include_directories(test_endpoint_contracts PRIVATE tests/native/endpoint_stubs firmware/main)
+target_compile_definitions(test_endpoint_contracts PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_options(test_endpoint_contracts PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+target_link_libraries(test_endpoint_contracts PRIVATE yyjson OpenSSL::Crypto m)
+add_test(NAME native-endpoint_contracts COMMAND test_endpoint_contracts
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/endpoint-contracts.json)

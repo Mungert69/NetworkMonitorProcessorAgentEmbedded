@@ -19,18 +19,18 @@ bash tests/integration/build-http-deadline.sh
 The build generates a temporary test certificate/private key in the ignored
 `build-http-deadline` directory. Only this test application trusts that
 certificate. Production firmware continues to use the normal certificate bundle.
-The test clock is set to build time to validate the short-lived certificate.
+The test clock is set to build time to validate the test certificates.
 
 Run with exclusive use of the emulator TAP (stop any other emulator using it).
 Set up the TAP with `sudo tools/setup-tap.sh` if necessary. On a host with an
-input firewall, allow only the test guest to the four test ports temporarily:
+input firewall, allow only the test guest to the five test ports temporarily:
 
 ```sh
 sudo iptables -I INPUT 1 -i nm-esp-tap -s 192.168.4.2 -d 192.168.4.1 \
-  -p tcp -m multiport --dports 18080,18443,18444,18445 -j ACCEPT
+  -p tcp -m multiport --dports 18080,18443,18444,18445,18446 -j ACCEPT
 python3 tests/integration/test_http_deadline.py
 sudo iptables -D INPUT -i nm-esp-tap -s 192.168.4.2 -d 192.168.4.1 \
-  -p tcp -m multiport --dports 18080,18443,18444,18445 -j ACCEPT
+  -p tcp -m multiport --dports 18080,18443,18444,18445,18446 -j ACCEPT
 ```
 
 Remove the temporary rule even if a test fails. The Python runner closes its
@@ -70,7 +70,7 @@ production DNS worker lifetime/late completion is covered by
 ownership and connect/DNS failure paths are covered by `native-http_deadline`.
 Both run with the normal ASan/UBSan host suite.
 
-After the 44 deadline cases, `probe_memory.c` tests the actual production pool:
+After the deadline and expiry cases, `probe_memory.c` tests the actual production pool:
 
 - Assertions verify probe stacks, owned inputs and DNS-helper stacks are in PSRAM.
 - Four deliberately blocked DNS helpers outlive 150 ms callers. The callers
@@ -113,3 +113,13 @@ deadline and endpoint lifetime tests also passed under ASan/UBSan.
 The 44-case suite also passed with 20 ms TAP egress delay after the delayed-connect
 fix: deadline cases completed at 1,200–1,202 ms and the retained heap difference
 was 1,056 bytes. Temporary delay and firewall rules were removed afterwards.
+
+The HTTPS advance-expiry cases use a trusted 30-day certificate and a trusted
+leaf expiring in two days (port 18446). The latter succeeds with the ordinary
+transport policy, fails with HTTPS's seven-day policy, and returns
+`HttpRequestException` through the production endpoint. With that policy enabled,
+wrong-hostname and untrusted certificates still fail. Native tests check the
+exact midnight boundary and calendar rollover. The suite requires the additional
+`HTTPS_EXPIRY_POLICY_PASS` marker. Certificate keys remain in the ignored test
+build directory. This workload does not execute Nmap or quantum endpoints;
+test-only linker wrappers assert if dispatch unexpectedly reaches them.

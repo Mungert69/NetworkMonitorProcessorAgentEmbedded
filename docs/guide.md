@@ -321,16 +321,19 @@ callback. Scan diagnostics are rate-limited and never log encrypted payloads.
 field, which can remain a frontend label, and counts captures up to
 `--max_captures` (default 10, limit 50) or the
 monitor timeout, returning success even at zero captures like .NET. The 256-byte
-monitor message reports the count/end reason rather than concatenating every
-captured payload; this is a deliberate embedded-size adaptation. Set a timeout
+monitor message reports the count; the owned PSRAM diagnostic contains complete
+raw advertisements, decoded readings/errors and the end reason. This is a
+deliberate embedded-size adaptation. Set a timeout
 longer than the beacon interval (for a 60-second Victron beacon, use over 60 s).
 Existing provisioned devices retain their stored appsettings, so an OTA image
 alone does not remove an older explicit `blebroadcastlisten` disable entry;
 update/reprovision that configuration before assigning such a monitor.
 
-Supported payload formats are `raw`, `aesgcm`, `aesctr`, and `victron` (which
-requires a 16-byte key). `--metric` supports PV power, battery voltage/current, yield and
-load current. `--manufacturer_id`, `--payload manufacturer|service|raw`,
+Supported payload formats are `raw`, `aesgcm`, `aesctr`, `victron`, `ruuvi`,
+and `bthome`. Victron supports 13 device families with a 16-byte broadcast key;
+Ruuvi RAWv2 is unencrypted, and BTHome v2 accepts plaintext or authenticated
+AES-CCM packets. See [decoder design, specifications and test procedure](ble-decoders.md). `--metric` selects all supported numeric fields with automatic scale/offset
+(for example `--format bthome --metric temperature`). `--manufacturer_id`, `--payload manufacturer|service|raw`,
 `--service_uuid` (16/32-bit or canonical GUID), `--raw_payload` (bounded hex),
 `--nonce_len`, `--tag_len`, and `--nonce_at start|end` are accepted. A raw-payload
 override skips RF scanning, as in .NET. BLE command processors remain

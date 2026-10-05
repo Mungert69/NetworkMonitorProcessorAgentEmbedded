@@ -9,6 +9,16 @@ LIB = ROOT.parent / "NetworkMonitorLib"
 SUPPORTED = {"icmp", "dns", "rawconnect", "http", "httphtml", "https", "blebroadcast", "blebroadcastlisten", "quantum", "quantumcert", "nmap"}
 
 class CapabilityCatalogTests(unittest.TestCase):
+    def test_supported_endpoints_have_current_contract_fixtures(self):
+        fixture = json.loads((ROOT / "tests/fixtures/endpoint-contracts.json").read_text())
+        self.assertEqual({entry["Type"] for entry in fixture["DurationCases"]}, SUPPORTED)
+        dispatch = (ROOT / "firmware/main/endpoints.c").read_text().split("nm_esp_result nm_esp_endpoint_run", 1)[0]
+        self.assertEqual(set(re.findall(r'strcmp\(type, "([^"]+)"\)', dispatch)), SUPPORTED)
+        snapshot = LIB / "Objects/Connection/Ble/metric-encodings-v2.json"
+        if snapshot.is_file():
+            self.assertEqual((ROOT / "tests/fixtures/ble-metric-encodings-v2.json").read_bytes(),
+                             snapshot.read_bytes())
+
     def test_templates_match_runtime_defaults(self):
         header = (ROOT / "firmware/main/nm_capability_defaults.h").read_text()
         defaults = {}

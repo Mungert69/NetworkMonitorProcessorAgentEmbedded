@@ -18,12 +18,12 @@
     "WriteIndented": true
   },
   "SourceRepository": "NetworkMonitorLib (sibling checkout)",
-  "SourceCommit": "3a78edf39c556966ce831518edf698ba2e9f86a1",
+  "SourceCommit": "8387cc4326d84c2d6d460f451de061fe5f59f689",
   "SourceWorkingTreeStatus": "",
   "Sources": [
     {
       "Path": "Objects/PingInfo.cs",
-      "Sha256": "33aaf0eb05a321cbd93f62cfb58c775102374729b355828085cd20ff704576e4"
+      "Sha256": "cb94c00bb4cebf24040ae6af21fc78f8573b16d5fa5c3febeca9ed6aeabcff4a"
     },
     {
       "Path": "Objects/RemovePingInfo.cs",

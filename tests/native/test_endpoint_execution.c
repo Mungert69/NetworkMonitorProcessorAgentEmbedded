@@ -71,6 +71,11 @@ esp_transport_handle_t nm_http_deadline_transport(nm_http_deadline *d)
 {
     return d;
 }
+void nm_http_deadline_check_certificate_expiry(nm_http_deadline *d, bool enabled)
+{
+    assert(d);
+    (void)enabled;
+}
 void nm_http_deadline_bind(nm_http_deadline *d, esp_http_client_handle_t c)
 {
     assert(d && c);
@@ -835,6 +840,23 @@ static void nmap_endpoint(void)
     result = nm_esp_endpoint_run(&monitor);
     assert(result.ok);
     nm_esp_result_release(&result);
+    /* Extension happens exactly once in endpoint dispatch; argv runner takes
+     * an exact budget. A late DNS worker exposes the whole timeout deterministically. */
+    dns_complete = false;
+    int64_t began = now_us;
+    result = nm_esp_endpoint_run(&monitor);
+    assert(!result.ok && now_us - began >= 1000000 && now_us - began <= 1001000);
+    finish_dns(0);
+    nm_esp_result_release(&result);
+    clean();
+    const char *exact_args[] = {"nmap", "-sV", "--system-dns", "host.test"};
+    began = now_us;
+    nm_nmap_run_result exact = nm_nmap_runner_execute(exact_args, 4, 100);
+    assert(exact.state == NM_NMAP_RUN_TIMED_OUT);
+    assert(now_us - began >= 100000 && now_us - began <= 101000);
+    finish_dns(0);
+    nm_nmap_runner_result_release(&exact);
+    dns_complete = true;
     nmap_test_mode = false;
     clean();
 }
@@ -1095,10 +1117,10 @@ int main(void)
         .Address = "AA:BB:CC:DD:EE:FF", .EndPointType = "blebroadcast", .Timeout = 75000};
     nm_esp_result ble_result = nm_esp_endpoint_run(&ble);
     assert(ble_result.ok && ble_result.elapsed_ms == 23);
-    assert(ble_monitor_seen == &ble && ble_timeout_seen == 75000);
+    assert(ble_monitor_seen == &ble && ble_timeout_seen == 750000);
     nm_monitor_record listen = {.EndPointType = "blebroadcastlisten", .Timeout = 25000};
     assert(nm_esp_endpoint_run(&listen).ok);
-    assert(ble_monitor_seen == &listen && ble_timeout_seen == 25000);
+    assert(ble_monitor_seen == &listen && ble_timeout_seen == 250000);
     shared_operation_limits();
     concurrent_operation_limits();
     assert(nm_esp_endpoint_configure_limit(2));

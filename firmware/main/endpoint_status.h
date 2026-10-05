@@ -16,7 +16,9 @@
  * Unnamed response codes retain their decimal representation.
  *
  * Integration: classify the actual outcome in endpoints.c, copy status/ok,
- * and use nm_endpoint_rtt at the state.c wire boundary instead of saturation.
+ * and use nm_esp_result_sample at the state.c model/wire boundary.
+ * nm_endpoint_rtt below is only the ordinary scale-1 status converter; extended
+ * durations and sensor samples follow endpoint_measurement.h/nm_esp.h.
  * Timing remains the caller's responsibility: rawconnect excludes DNS,
  * ICMP uses the reply RTT, DNS/HTTP measure their operation.
  * This helper does not build diagnostic messages or mutate monitor counters.

@@ -118,7 +118,8 @@ void esp_fill_random(void *buffer, size_t length)
 }
 bool nm_esp_endpoint_supported(const char *type)
 {
-    return type && !strcmp(type, "http");
+    return type && (!strcmp(type, "http") || !strcmp(type, "nmap") ||
+                    !strcmp(type, "blebroadcastlisten") || !strcmp(type, "blebroadcast"));
 }
 nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
 {
@@ -843,8 +844,7 @@ static bool fake_poll(void *context, nm_probe_reply *reply, uint32_t timeout_ms)
         return false;
     }
     *reply = f->lifo ? f->queue[--f->tail] : f->queue[f->head++];
-    reply->result =
-        (nm_esp_result){.ok = true, .elapsed_ms = 23, .status = "OK", .message = "reachable"};
+    reply->result = endpoint_result;
     if (f->local_failure)
         reply->result =
             (nm_esp_result){.disposition = NM_PROBE_LOCAL_FAILURE, .message = "injected OOM"};
@@ -1223,12 +1223,58 @@ static void test_registration_handoff_snapshot(void)
     yyjson_mut_doc_free(reply);
 }
 
+/* Actual sequential/concurrent state publication: durations scale once,
+ * sensor values bypass timing scale, failure retains 65535 and counters. */
+static void test_measurement_samples(void)
+{
+    const char *types[] = {"http", "nmap", "blebroadcastlisten", "blebroadcast"};
+    for (unsigned concurrent = 0; concurrent < 2; ++concurrent)
+        for (size_t t = 0; t < sizeof(types) / sizeof(types[0]); ++t) {
+            reset();
+            char init[256];
+            snprintf(init, sizeof(init),
+                     "{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"example.test\","
+                     "\"EndPointType\":\"%s\",\"Enabled\":true}]}",
+                     types[t]);
+            nm_esp_state *s = initialized(init);
+            if (concurrent)
+                nm_esp_state_set_probe_executor(s, fake_executor_new(1, false, false));
+            bool sensor = !strcmp(types[t], "blebroadcast");
+            bool extended = !strcmp(types[t], "nmap") || !strcmp(types[t], "blebroadcastlisten");
+            endpoint_result.elapsed_ms = extended || sensor ? 70009 : 1234;
+            endpoint_result.has_sample = sensor;
+            endpoint_result.sample = 32123;
+            uint16_t expected = sensor ? 32123 : extended ? 7000 : 1234;
+            CHECK(cycle(s));
+            CHECK(number(info(), "PacketsRecieved") == 1);
+            CHECK(number(AT(GET(data(), "PingInfos"), 0), "RoundTripTime") == expected);
+            CHECK(yyjson_mut_get_num(GET(info(), "RoundTripTimeAverage")) == expected);
+            bool sent = false;
+            for (size_t m = 0; m < message_count; ++m) {
+                if (strcmp(messages[m].topic, "processor/out/data"))
+                    continue;
+                yyjson_mut_doc *wire = decode(m);
+                CHECK(number(AT(GET(ROOT(wire), "PingInfos"), 0), "RoundTripTime") == expected);
+                yyjson_mut_doc_free(wire);
+                sent = true;
+            }
+            CHECK(sent);
+            clear_messages();
+            endpoint_result.ok = false;
+            CHECK(cycle(s));
+            CHECK(number(AT(GET(data(), "PingInfos"), 1), "RoundTripTime") == UINT16_MAX);
+            CHECK(number(info(), "PacketsLost") == 1);
+            nm_esp_state_free(s);
+        }
+}
+
 int main(int argc, char **argv)
 {
     const struct {
         const char *name;
         void (*run)(void);
-    } tests[] = {{"base64", test_base64},
+    } tests[] = {{"measurement_samples", test_measurement_samples},
+                 {"base64", test_base64},
                  {"registration_handoff_snapshot", test_registration_handoff_snapshot},
                  {"commands_ram_only", test_commands_ram_only},
                  {"reboot_between_cycles", test_reboot_between_cycles},

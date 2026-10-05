@@ -3,11 +3,11 @@
 
 bool nm_esp_endpoint_supported(const char *type)
 {
-    return type && (!strcmp(type, "icmp") || !strcmp(type, "dns") || !strcmp(type, "rawconnect") ||
-                    !strcmp(type, "http") || !strcmp(type, "httphtml") || !strcmp(type, "https") ||
-                    !strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten") ||
-                    !strcmp(type, "quantum") || !strcmp(type, "quantumcert") ||
-                    !strcmp(type, "nmap"));
+    return type &&
+           (!strcmp(type, "icmp") || !strcmp(type, "dns") || !strcmp(type, "rawconnect") ||
+            !strcmp(type, "http") || !strcmp(type, "httphtml") || !strcmp(type, "https") ||
+            !strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten") ||
+            !strcmp(type, "quantum") || !strcmp(type, "quantumcert") || !strcmp(type, "nmap"));
 }
 
 nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
@@ -26,6 +26,7 @@ nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
         timeout = 10000;
     if (timeout > 600000)
         timeout = 600000;
+    timeout *= nm_endpoint_timeout_multiplier(type);
     if (!strcmp(type, "icmp"))
         return nm_endpoint_check_icmp(address, timeout);
     if (!strcmp(type, "dns"))

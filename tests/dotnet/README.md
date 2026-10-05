@@ -83,3 +83,16 @@ instances/probes in `Program.cs`. Link any needed real dependencies as well;
 avoid placeholder types or copied declarations. Keep selected models free of
 external package dependencies. Regenerate, run `--check`, and review the JSON
 diff before committing the generator and fixtures together.
+
+## Full-library endpoint oracle
+
+`bash tests/dotnet/generate-endpoints.sh --check` separately builds EndpointParity,
+which references the actual full sibling library and its cached dependencies.
+Unlike the package-free JSON oracle above, it executes the real factory,
+measurement catalogue and BLE decoders. It verifies the pinned
+`tests/fixtures/endpoint-contracts.json` including source hashes. Run without
+`--check` only after reviewing a deliberate contract change. The production C
+`native-endpoint_contracts` target consumes its policies/readings/status names;
+[the endpoint audit](../../docs/endpoint-parity-audit.md) describes scope and
+remaining outcome differences. Build artifacts remain ignored; no network,
+radio, broker, credentials or provisioned flash are needed.

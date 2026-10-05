@@ -7,6 +7,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 #include "http_deadline.h"
+#include "endpoint_internal.h"
 #include "nvs_flash.h"
 #include <assert.h>
 #include <stdio.h>
@@ -36,10 +37,12 @@ static bool resolve_test(const char *host, unsigned port, unsigned timeout, stru
         (!strcmp(host, "deadline.test") || !strcmp(host, "wrong.test")) ? "192.168.4.1" : host;
     return getaddrinfo(ip, NULL, &hints, out) == 0;
 }
-static void run_url(const char *url, bool timeout_expected, bool success_expected)
+static void run_url_policy(const char *url, bool timeout_expected, bool success_expected,
+                           bool policy)
 {
     nm_http_deadline *deadline = nm_http_deadline_new(1200, resolve_test);
     assert(deadline);
+    nm_http_deadline_check_certificate_expiry(deadline, policy);
     esp_http_client_config_t config = {.url = url,
                                        .timeout_ms = 1200,
                                        .max_redirection_count = 5,
@@ -65,6 +68,10 @@ static void run_url(const char *url, bool timeout_expected, bool success_expecte
     esp_http_client_cleanup(client);
     nm_http_deadline_free(deadline);
     assert(heap_caps_check_integrity_all(true));
+}
+static void run_url(const char *url, bool timeout_expected, bool success_expected)
+{
+    run_url_policy(url, timeout_expected, success_expected, false);
 }
 static void run_case(const char *path, bool timeout_expected)
 {
@@ -93,6 +100,16 @@ void app_main(void)
     assert(xEventGroupWaitBits(connected, 1, false, true, pdMS_TO_TICKS(15000)) & 1);
     run_case("/ok", false);
     run_url("https://deadline.test:18443/ok", false, true);
+    run_url_policy("https://deadline.test:18443/ok", false, true, true);
+    run_url_policy("https://deadline.test:18446/ok", false, true, false);
+    run_url_policy("https://deadline.test:18446/ok", false, false, true);
+    run_url_policy("https://wrong.test:18443/ok", false, false, true);
+    run_url_policy("https://deadline.test:18445/ok", false, false, true);
+    assert(nm_esp_endpoint_configure_limit(4));
+    nm_esp_result near = nm_endpoint_check_http("https://deadline.test:18446/ok", "https", 0, 1200);
+    printf("HTTPS_EXPIRY_ENDPOINT status=%s detail=%s\n", near.status, near.message);
+    assert(!near.ok && !strcmp(near.status, "HttpRequestException"));
+    puts("HTTPS_EXPIRY_POLICY_PASS");
     size_t baseline = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     for (int repeat = 0; repeat < 3; ++repeat) {
         run_case("/stall", true);

@@ -25,6 +25,12 @@ compile those modules separately. Serial emulator tests exercise the production
 configuration/reset modules, including interrupted factory setup. These checks
 do not replace physical-board testing.
 
+The [2026-10-05 endpoint audit](endpoint-parity-audit.md) checks all supported
+endpoint types against the current .NET sources, documents remaining HTTP
+routing differences and the matched HTTPS advance-expiry policy, and provides a real-library measurement/decoder
+oracle. Successful Nmap and BLE-listen durations now use scale 10; BLE sensor
+samples retain their protocol catalogue encoding.
+
 ## Contracts and reference code
 
 | Contract | .NET reference | Native coverage |
@@ -41,27 +47,30 @@ do not replace physical-board testing.
 | Quantum endpoints | `QuantumConnect`, `QuantumCertConnect`, `QuantumCertificateAnalyzer` | Exact status strings, signature-or-key classification, verified TLS 1.3, bounded DNS adapter; native interoperability/concurrency/allocation tests |
 | Nmap service endpoint | `NmapCmdConnect` with `-sV` | Endpoint constructs a bounded argv and invokes a process-like embedded runner; configured port or small common-port list, bounded report and local-resource failure semantics. It is an embedded adaptation, not full Nmap output/service fingerprint parity; `nmapvuln` remains unsupported. |
 | Command processors | `QuantumCert`, `QuantumConnect`, `QuantumPortScanner`, `QuantumInfo`, `Openssl`, `Nmap` | Typed command policies and shared process-like runners; .NET naming/metadata drift checks, sanitizer-enabled worker/parser/codec tests, real TLS interoperability and signed MQTT board tests. See [scope and adaptations](command-processor-port-notes.md); arbitrary OpenSSL/Nmap CLI parity is not claimed. |
-| BLE broadcast/listen | `BleBroadcastConnect`, `BleBroadcastListenConnect`, `BleBroadcastCmdProcessor.IsVictronInstantReadout` | Shared passive scanner, bounded per-worker waiters, source-vector AD filter and production endpoint/AES tests, signed ESP-IDF build; physical RF/coexistence validation still required |
+| BLE broadcast/listen | `BleBroadcastConnect`, `BleBroadcastListenConnect`, shared `Objects/Connection/Ble` decoders | Shared passive scanner, bounded per-worker waiters, source-vector AD filter and production endpoint/AES tests, signed ESP-IDF build; physical RF/coexistence validation still required |
 
 The BLE endpoints share one NimBLE observer instead of starting a platform scan
 for each .NET connect. A fresh waiter is registered for each probe, so a stale
-advertisement cannot satisfy a later check. Victron waiters admit only company
-`0x02E1` instant-readout records matching the key-check byte. The shared
+advertisement cannot satisfy a later check. Protocol waiters use the shared immutable decoder registry. Victron admits
+all 13 supported record types for company `0x02E1`, matching the key-check byte
+when a key is supplied. Ruuvi RAWv2 and BTHome v2 select company `0x0499` and
+service data `0xFCD2` respectively. The shared
 scanner does no decryption or model mutation in its callback. Listen completion
-uses the .NET success-on-zero-captures rule; only the capture count and end
-reason fit in the bounded device message. Service UUID selection and raw-payload
+uses the .NET success-on-zero-captures rule; the bounded device message reports the count, while an owned PSRAM diagnostic
+contains complete raw captures, decoded readings/errors and the end reason. Service UUID selection and raw-payload
 overrides are supported, while scan-response-only fields are unavailable in
 passive mode. The bounded listen message is an embedded adaptation rather than
-byte-for-byte .NET output parity.
+byte-for-byte .NET output parity. See [decoder port and reproduction](ble-decoders.md)
+for supported layouts, key policies, vectors and remaining hardware checks.
 
-Victron metric readings use five fixed `PingInfo.Status` labels: `BLE pv_power`,
-`BLE battery_voltage`, `BLE battery_current`, `BLE load_current`, and
-`BLE yield_today`, matching the corrected .NET endpoint. Metric aliases resolve
-to these same labels. The selected reading remains in `PingInfo.RoundTripTime`
-with its existing scaling; readable measurements remain in the monitor
-diagnostics. Never append measurements to `PingInfo.Status`: the backend interns
-each distinct status in a table with unsigned 16-bit IDs. Older firmware/.NET
-builds included measurements in the status and could exhaust that table.
+Explicit BLE metrics use fixed `BLE v2:<format>:<metric>` status labels across
+Victron, Ruuvi and BTHome. The typed selected reading is encoded in
+`PingInfo.RoundTripTime` using the shared versioned catalogue's scale/offset;
+65535 remains reserved for failure. Unit/scale/offset are resolved by Data/API
+from the configured protocol/metric. Readable measurements remain in diagnostics.
+Without explicit `--metric`, implicit solar/receipt behavior remains. Historical
+encoding conversion is deliberately omitted. Never append changing measurements
+to `PingInfo.Status`: the backend interns distinct statuses using 16-bit IDs.
 
 The oracle in `tests/dotnet` compiles linked original model files and produces
 committed fixtures with source hashes. It does not recreate model declarations.

@@ -20,6 +20,8 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include "mbedtls/x509_crt.h"
 
 /* All fields and all transport operations belong to the calling task. There
  * is no cancellation timer, shared client handle or asynchronous destruction. */
@@ -30,11 +32,58 @@ struct nm_http_deadline {
     esp_http_client_handle_t client;
     char *hostname; /* TLS verification AND SNI use original host, never its IP. */
     bool resource_failed;
+    bool check_expiry;
 };
 
 bool nm_http_deadline_resource_failed(const nm_http_deadline *deadline)
 {
     return deadline->resource_failed;
+}
+
+/* IDF 6.1's bundle implementation exports this verifier but does not declare
+ * it in esp_crt_bundle.h. Delegate before adding policy; never replace bundle
+ * trust/signature verification. Firmware linking and real TLS tests cover this
+ * pinned SDK dependency when upgrading IDF. */
+extern int esp_crt_verify_callback(void *, mbedtls_x509_crt *, int, uint32_t *);
+
+static bool expires_within_week(const mbedtls_x509_time *expiry, time_t now)
+{
+    struct tm today, boundary;
+    if (!gmtime_r(&now, &today))
+        return true;
+    time_t cutoff = now - today.tm_hour * 3600 - today.tm_min * 60 - today.tm_sec + 7 * 86400;
+    if (!gmtime_r(&cutoff, &boundary))
+        return true;
+    const int actual[] = {expiry->year, expiry->mon, expiry->day,
+                          expiry->hour, expiry->min, expiry->sec};
+    const int limit[] = {boundary.tm_year + 1900, boundary.tm_mon + 1, boundary.tm_mday,
+                         boundary.tm_hour,        boundary.tm_min,     boundary.tm_sec};
+    for (unsigned i = 0; i < sizeof(actual) / sizeof(actual[0]); ++i) {
+        if (actual[i] != limit[i])
+            return actual[i] < limit[i];
+    }
+    return false; /* Exactly seven calendar days is accepted, as in .NET. */
+}
+
+static int verify_expiry(void *context, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
+{
+    int result = esp_crt_verify_callback(context, crt, depth, flags);
+    if (!result && depth == 0 && expires_within_week(&crt->valid_to, time(NULL)))
+        *flags |= MBEDTLS_X509_BADCERT_OTHER;
+    return result;
+}
+
+static esp_err_t attach_expiry_policy(void *config)
+{
+    esp_err_t result = esp_crt_bundle_attach(config);
+    if (result == ESP_OK && config)
+        mbedtls_ssl_conf_verify(config, verify_expiry, NULL);
+    return result;
+}
+
+void nm_http_deadline_check_certificate_expiry(nm_http_deadline *deadline, bool enabled)
+{
+    deadline->check_expiry = enabled;
 }
 
 static bool tls_allocation_failed(int code)
@@ -140,7 +189,9 @@ static int connect_transport(esp_transport_handle_t transport, const char *host,
                 break;
             }
             esp_transport_ssl_set_common_name(deadline->connection, deadline->hostname);
-            esp_transport_ssl_crt_bundle_attach(deadline->connection, esp_crt_bundle_attach);
+            esp_transport_ssl_crt_bundle_attach(deadline->connection, deadline->check_expiry
+                                                                          ? attach_expiry_policy
+                                                                          : esp_crt_bundle_attach);
         }
         int rc = 0;
         /* Numeric IP bypasses blocking DNS inside ESP-TLS. Give its initial

@@ -153,3 +153,24 @@ void run_probe_memory_test(void)
     assert(heap_caps_check_integrity_all(true));
     puts("PROBE_MEMORY_INTEGRATION_PASS");
 }
+
+/* This isolated HTTP/pool application does not link Nmap or the quantum TLS
+ * library. Unexpected dispatch into either fails the test, never succeeds. */
+nm_esp_result __wrap_nm_endpoint_check_nmap(const char *host, unsigned port, unsigned timeout)
+{
+    (void)host;
+    (void)port;
+    (void)timeout;
+    assert(!"Nmap is outside this HTTP integration workload");
+    return (nm_esp_result){0};
+}
+nm_esp_result __wrap_nm_endpoint_check_quantum(const char *host, const char *type, unsigned port,
+                                               unsigned timeout)
+{
+    (void)host;
+    (void)type;
+    (void)port;
+    (void)timeout;
+    assert(!"Quantum TLS is outside this HTTP integration workload");
+    return (nm_esp_result){0};
+}

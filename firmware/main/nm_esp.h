@@ -10,6 +10,7 @@
 #include "monitor_model.h"
 #include "mqtt_client.h"
 #include "nm_command_limits.h"
+#include "endpoint_measurement.h"
 
 enum { NM_ESP_MAX_PUBLICATION = 131072, NM_ESP_MAX_MONITORS = 150 };
 
@@ -42,16 +43,27 @@ typedef enum { NM_PROBE_OBSERVATION, NM_PROBE_LOCAL_FAILURE } nm_probe_dispositi
 typedef struct {
     bool ok;
     nm_probe_disposition disposition;
-    unsigned elapsed_ms;
+    unsigned elapsed_ms; /* Actual elapsed time, including for sensor probes. */
+    uint16_t sample;     /* Encoded numeric reading when has_sample is true. */
+    bool has_sample;
     char status[64];
     char message[256];
     /* Optional PSRAM-owned long diagnostic, transferred through the probe
      * executor and released with nm_esp_result_release(). */
     char *detail_message;
 } nm_esp_result;
+/* Borrowed result; apply duration scale once at the model/wire boundary. */
+static inline uint16_t nm_esp_result_sample(const char *type, const nm_esp_result *result)
+{
+    if (!result->ok)
+        return UINT16_MAX;
+    return result->has_sample ? result->sample
+                              : nm_endpoint_duration_sample(type, true, result->elapsed_ms);
+}
 static inline void nm_esp_result_release(nm_esp_result *result)
 {
-    if (!result) return;
+    if (!result)
+        return;
     free(result->detail_message);
     result->detail_message = NULL;
 }

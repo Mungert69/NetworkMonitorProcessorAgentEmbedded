@@ -21,6 +21,7 @@ typedef struct {
 #define PSA_KEY_USAGE_DECRYPT 2
 #define PSA_ALG_ECB_NO_PADDING 1
 #define PSA_ALG_GCM 2
+#define PSA_ALG_CCM 3
 #define PSA_ALG_AEAD_WITH_SHORTENED_TAG(alg, length) ((alg) | ((length) << 8))
 #define PSA_SUCCESS 0
 

@@ -191,6 +191,14 @@ with `NM_OTA_SIGNING_KEY=/absolute/path/to/key.pem`. The build script exposes it
 to ESP-IDF through a temporary permission-restricted symlink; no key is copied
 into source control.
 
+## Endpoint parity audit
+
+See [the current endpoint audit](endpoint-parity-audit.md) for all 11 supported
+types, the scale/timeout policy, C result structure, remaining HTTP/BLE gaps,
+and the actual-.NET endpoint/decoder oracle. `endpoint_measurement.h` holds only
+processor encoding/deadline policy; shared .NET backend metadata owns units,
+descriptions, timing thresholds and LLM guidance.
+
 ## Capability reporting
 
 The firmware supports `icmp`, `dns`, `rawconnect`, `http`, `httphtml`,
@@ -204,7 +212,8 @@ process-like so another platform could execute a real binary behind it. This
 repo does not include Nmap code/data and does not support `nmapvuln`.
 Both BLE endpoints share one
 passive NimBLE scanner; they do not create a scanner per monitor. See the
-[BLE support notes](guide.md#ble-broadcast-monitoring) for packet filtering,
+[BLE support notes](guide.md#ble-broadcast-monitoring) and
+[decoder port reference](ble-decoders.md) for packet filtering,
 supported options, and the bounded listen-output adaptation. BLE command
 processors remain unsupported. Supported command types are `QuantumCert`,
 `QuantumConnect`, `QuantumPortScanner`, `QuantumInfo`, `Openssl` and `Nmap`.
@@ -225,3 +234,8 @@ schema changes are required. Future additions to the .NET catalog must also be
 added to the disabled lists until implemented; run
 `python3 tests/tooling/test_capability_catalog.py` with the sibling NetworkMonitorLib
 checkout to detect catalog drift.
+
+Automatic BLE metric conversions live in `firmware/main/ble_metric.*`; their
+reviewed .NET constants are generated into `ble_metric_catalogue.inc` by
+`tools/update-ble-metrics.py`. See [BLE reproduction](ble-decoders.md) for the
+typed reading sink, shared schema, generated snapshot and required checks.
