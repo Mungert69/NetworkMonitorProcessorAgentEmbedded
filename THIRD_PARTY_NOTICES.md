@@ -1,4 +1,4 @@
-# Third-party notices for firmware v0.4.0
+# Third-party notices for firmware v0.4.1
 
 This firmware is distributed under GPL-3.0-only for project-authored code.
 The dependencies below keep their own terms; this file does not relicense them.
@@ -14,7 +14,7 @@ dependency lock and this notice identify the managed component sources.
 | ESP-IDF | v6.1, source commit `fff9895c82d744c7237be8847347bdd1b07c6643` | Apache-2.0 plus component-specific terms; see the IDF `LICENSE` and each component's notices |
 
 The IDF build's CycloneDX SBOM is included as
-`NetworkMonitorProcessorAgentEmbedded-v0.4.0.cdx.json`. ESP-IDF and its
+`NetworkMonitorProcessorAgentEmbedded-v0.4.1.cdx.json`. ESP-IDF and its
 components also include BSD, MIT, ISC, and other separately licensed works;
 consult the SBOM and the corresponding files in the pinned ESP-IDF source tree.
 The IDF source is available at
