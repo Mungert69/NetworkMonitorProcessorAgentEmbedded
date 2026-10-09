@@ -1,0 +1,4 @@
+  python3 tools/stage_firmware.py \
+    --app firmware/build/networkmonitor_processor_esp32.bin \
+    --directory "$HOME/code/securefiles/live/firmware"
+
