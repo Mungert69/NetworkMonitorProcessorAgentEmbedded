@@ -130,6 +130,10 @@ size_t nm_esp_state_monitor_count(const nm_esp_state *s)
 {
     return s ? s->core.hosts.count : 0;
 }
+size_t nm_esp_state_pending_ping_count(const nm_esp_state *s)
+{
+    return s ? s->core.pings.count : 0;
+}
 bool nm_esp_state_init(nm_esp_state *s, const nm_esp_config *config, yyjson_mut_val *request)
 {
     nm_model next = {0};

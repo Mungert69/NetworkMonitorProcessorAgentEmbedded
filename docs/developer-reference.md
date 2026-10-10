@@ -248,3 +248,21 @@ refreshes address protection and publishes the next snapshot.
 `endpoint_ble.c` reads it without waiting and averages selected physical values.
 See [continuous BLE policy](monitoring-parity.md) and
 [reproduction tests](ble-decoders.md#continuous-buffer-regression-procedure).
+
+### Normal-running resource summary
+
+At INFO level, `nm_processor` emits one `resources` line after each attempted
+monitor cycle. It includes cycle success, readings awaiting application
+acknowledgement (`pending_pings`), BLE-owned allocated bytes/reception records/
+shared payload allocations/snapshots/allocation drops, free and minimum-ever
+internal RAM/PSRAM, largest free internal block, processor/worker stack headroom,
+and MQTT queue depth, peak depth, queue drops and allocation failures. Memory
+and stack figures are bytes. Minima/queue peaks and failures are cumulative since
+boot; the line samples current allocations rather than measuring each cycle's
+peak. BLE allocation includes records retained by snapshots, not just live history;
+intentional repeat suppression is not counted as a drop. Pending pings can be
+nonzero normally while the backend acknowledgement is in flight.
+
+Active-phase memory samples and detailed BLE traces remain DEBUG, so normal
+running produces one combined resource summary per cycle, without packet traces
+or per-repeat logging. No payloads, credentials or addresses are included.

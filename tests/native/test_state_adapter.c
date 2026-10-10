@@ -681,6 +681,7 @@ static void test_high_ids(void)
     yyjson_mut_doc_free(wire);
     yyjson_mut_doc *ack = parse("{\"RemovePingInfos\":[{\"ID\":9007199254740992}]}");
     CHECK(nm_esp_state_ack(s, ROOT(ack)) && SIZE(GET(data(), "PingInfos")) == 2);
+    CHECK(nm_esp_state_pending_ping_count(s) == 2);
     yyjson_mut_doc_free(ack);
     ack = parse("{\"RemovePingInfos\":[{\"ID\":9007199254740993}]}");
     unsigned saves = save_calls;

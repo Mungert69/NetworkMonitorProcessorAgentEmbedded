@@ -117,6 +117,8 @@ void nm_esp_state_set_yield(nm_esp_state *state, bool (*yield)(void *), void *co
  * cycle probes monitors sequentially on the processor task. */
 void nm_esp_state_set_probe_executor(nm_esp_state *state, nm_probe_executor *executor);
 size_t nm_esp_state_monitor_count(const nm_esp_state *state);
+/* Processor-task read only; includes readings awaiting application acknowledgement. */
+size_t nm_esp_state_pending_ping_count(const nm_esp_state *state);
 bool nm_esp_state_init(nm_esp_state *state, const nm_esp_config *config, yyjson_mut_val *data);
 bool nm_esp_state_updates(nm_esp_state *state, const nm_esp_config *config,
                           yyjson_mut_val *updates);
