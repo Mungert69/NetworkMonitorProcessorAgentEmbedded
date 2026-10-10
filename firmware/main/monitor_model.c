@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include "monitor_model.h"
+#include "endpoint_measurement.h"
 #include "monitor_numbers.h"
 #include "monitor_record_internal.h"
 #include "monitor_schedule_typed.h"
@@ -150,7 +151,8 @@ static bool fill(nm_model *m, nm_monitor_record *info, const nm_monitor_record *
     if (!nm_record_has(&host->base, NM_M_SkipCycles) ||
         nm_record_null(&host->base, NM_M_SkipCycles))
         nm_record_mark(&info->base, NM_M_SkipCycles, true);
-    MSET(info, Timeout, host->Timeout ? host->Timeout : timeout(m));
+    MSET(info, Timeout,
+         nm_endpoint_configured_timeout(host->EndPointType, host->Timeout, timeout(m)));
     TRY(MSTR(info, Host, info->Address));
     if (!fresh)
         return true;

@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS
-        "main.c" "ble_scanner.c"
+        "main.c" "ble_scanner.c" "ble_buffer.c" "ble_cycle.c"
         # Provisioning, persistent configuration and platform networking.
         "config.c" "config_reset.c" "network.c" "serial_console.c" "wifi_setup.c"
         "enrollment.c" "enrollment_http.c" "enrollment_oauth.c" "enrollment_registration.c"

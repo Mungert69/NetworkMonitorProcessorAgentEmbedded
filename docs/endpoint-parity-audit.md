@@ -104,19 +104,16 @@ unconditionally interchangeable.
   uses an execution fallback of 10000 ms for an actual zero, and caps base
   timeout at 600000 ms before extension. Normal inherited 59000-ms settings
   align; arbitrary overlong/zero settings do not have identical handling.
-- **BLE subset:** C supports long `--option` forms, bounded tokens/255-byte
-  advertisements, 1–50 listen captures, passive advertising only, and no
-  standalone BLE command processors. .NET also has short option forms and no
-  corresponding 50-capture limit. Manual `--metric_scale` / `--metric_offset`
-  and custom text-only command-provider results remain .NET-only; C explicitly
-  rejects manual overrides. Use automatic `--format … --metric …` on both.
-  C accepts hexadecimal manufacturer IDs as an additional syntax; .NET's
-  integer schema expects decimal. Embedded NUL text renders as `\\0` on C.
-- **BLE failed live decodes:** C can keep waiting within the deadline after a
-  failed protocol decode; .NET platform paths can return that decode error
-  immediately. Bad explicit raw overrides fail immediately on both. Victron
-  ciphertext is unauthenticated; equal key-check bytes do not establish a key
-  is correct. BTHome authenticates before reading selection on both.
+- **BLE subset (updated for continuous capture):** Both implementations use
+  shared history and cycle snapshots, average selected physical values, and
+  default to a 70s BLE window. The ordinary timeout clamp above no longer applies
+  to BLE. C supports long options, bounded tokens/255-byte legacy advertisements,
+  passive scanning only, and no standalone BLE command processors. Raw listen
+  has no capture cap and does not decrypt. Manual metric scale/offset overrides
+  remain .NET-only. Hexadecimal manufacturer IDs are an additional C syntax;
+  embedded NUL text renders as `\\0`. Failed live decodes are skipped while
+  considering the remaining snapshot, while bad raw overrides fail explicitly.
+  See [continuous capture policy](monitoring-parity.md).
 - **Embedded resource handling:** DNS/ICMP late operations keep their bounded
   lifetime slot; local allocation/socket/scanner admission failures are
   inconclusive and retried on a later cycle. They do not create host-down pings

@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nm_probe_pool.h"
+#include "ble_buffer.h"
 #include "processor_internal.h"
 #include "processor_mqtt_buffer.h"
 #include <stdlib.h>
@@ -151,6 +152,11 @@ void nm_esp_processor_run(const nm_esp_config *config)
             bool cycle_ok = nm_esp_state_cycle(agent->state, config, agent->client);
             if (!cycle_ok)
                 ESP_LOGW(TAG, "monitor cycle failed or paused");
+            nm_ble_buffer_stats ble_stats = nm_ble_buffer_get_stats();
+            ESP_LOGD(TAG, "BLE history bytes=%u packets=%u snapshots=%u dropped=%llu payloads=%u",
+                     (unsigned)ble_stats.bytes, (unsigned)ble_stats.packets,
+                     (unsigned)ble_stats.snapshots, (unsigned long long)ble_stats.dropped,
+                     (unsigned)ble_stats.payloads);
 #ifdef NM_COMMAND_BENCHMARK
             if (cycle_ok)
                 nm_command_benchmark_cycle();
@@ -158,7 +164,7 @@ void nm_esp_processor_run(const nm_esp_config *config)
             /* Per-cycle resource probe: heap headroom and the tightest task
              * stack high-water marks, so a concurrent-probe build can be
              * validated against real device RAM. All values are bytes. */
-            ESP_LOGI(TAG,
+            ESP_LOGD(TAG,
                      "resources internal_free=%u internal_min=%u largest_internal=%u "
                      "psram_free=%u psram_min=%u proc_stack_min=%u worker_stack_min=%u "
                      "mqtt_queue=%u mqtt_queue_peak=%u mqtt_queue_drops=%u "

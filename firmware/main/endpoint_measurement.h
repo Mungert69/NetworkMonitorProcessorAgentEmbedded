@@ -1,5 +1,6 @@
 #ifndef NM_ENDPOINT_MEASUREMENT_H
 #define NM_ENDPOINT_MEASUREMENT_H
+#include "ble_endpoint_policy.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,6 +9,13 @@
  * Data/API owns descriptive/analysis metadata through the shared .NET catalogue.
  * Borrowed endpoint name; no allocation or state mutation. */
 enum { NM_EXTENDED_DURATION_SCALE = 10 };
+/* Preserve BLE configuration: its endpoint owns the effective lookback default.
+ * Ordinary endpoint defaults retain the established processor timeout policy. */
+static inline int32_t nm_endpoint_configured_timeout(const char *type, int32_t configured,
+                                                      int32_t processor_default)
+{
+    return configured || nm_ble_endpoint_supported(type) ? configured : processor_default;
+}
 static inline unsigned nm_endpoint_duration_scale(const char *type)
 {
     return type && (!strcmp(type, "nmap") || !strcmp(type, "blebroadcastlisten"))

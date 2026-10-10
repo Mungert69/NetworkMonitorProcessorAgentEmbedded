@@ -239,3 +239,12 @@ Automatic BLE metric conversions live in `firmware/main/ble_metric.*`; their
 reviewed .NET constants are generated into `ble_metric_catalogue.inc` by
 `tools/update-ble-metrics.py`. See [BLE reproduction](ble-decoders.md) for the
 typed reading sink, shared schema, generated snapshot and required checks.
+
+BLE uses `ble_scanner.*` for continuous radio capture and `ble_buffer.*` for
+PSRAM address histories, eviction and immutable reference-counted cycle
+snapshots. `state.c` calls `ble_cycle.*` at the cycle boundaries; that coordinator
+refreshes address protection and publishes the next snapshot.
+`ble_endpoint_policy.h` owns the default and effective measurement window;
+`endpoint_ble.c` reads it without waiting and averages selected physical values.
+See [continuous BLE policy](monitoring-parity.md) and
+[reproduction tests](ble-decoders.md#continuous-buffer-regression-procedure).

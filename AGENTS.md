@@ -89,7 +89,7 @@ Within `firmware/main/`, put work in the following places:
 | `storage.c` | Bounded NVS storage adapter |
 | `endpoints.c` | Supported endpoint selection and dispatch |
 | `endpoint_dns.c`, `endpoint_icmp.c`, `endpoint_tcp.c`, `endpoint_http.c` | Individual probe implementations |
-| `ble_scanner.c`, `ble_filter.h`, `endpoint_ble.c`, `ble_decoder.*`, `ble_crypto.*`, `ble_*_decoder.c`, `ble_victron_records.c`, `ble_metric.*`, `ble_metric_catalogue.inc` | Shared passive BLE scan, decoder registry, manufacturer/device layouts and PSA crypto; see `docs/ble-decoders.md`; no model mutations in callbacks |
+| `ble_scanner.c`, `ble_buffer.*`, `ble_cycle.*`, `ble_endpoint_policy.h`, `ble_filter.h`, `endpoint_ble.c`, `ble_decoder.*`, `ble_crypto.*`, `ble_*_decoder.c`, `ble_victron_records.c`, `ble_metric.*`, `ble_metric_catalogue.inc` | Shared passive BLE scan, PSRAM address history/immutable cycle snapshots, decoder registry, manufacturer/device layouts and PSA crypto; see `docs/ble-decoders.md`; no model mutations in callbacks |
 | `endpoint_common.c`, `http_deadline.c` | Shared endpoint helpers; request deadline/transport lifetime |
 | `endpoint_dns_task.c` | PSRAM DNS-task creation and internal-stack completion reaper |
 | `endpoint_quantum.c`, `tls_inspection.*`, `quantum_tls.*` | Endpoint status mapping; typed inspection/deadline/DNS orchestration; wolfSSL backend, no model mutations |

@@ -47,21 +47,52 @@ samples retain their protocol catalogue encoding.
 | Quantum endpoints | `QuantumConnect`, `QuantumCertConnect`, `QuantumCertificateAnalyzer` | Exact status strings, signature-or-key classification, verified TLS 1.3, bounded DNS adapter; native interoperability/concurrency/allocation tests |
 | Nmap service endpoint | `NmapCmdConnect` with `-sV` | Endpoint constructs a bounded argv and invokes a process-like embedded runner; configured port or small common-port list, bounded report and local-resource failure semantics. It is an embedded adaptation, not full Nmap output/service fingerprint parity; `nmapvuln` remains unsupported. |
 | Command processors | `QuantumCert`, `QuantumConnect`, `QuantumPortScanner`, `QuantumInfo`, `Openssl`, `Nmap` | Typed command policies and shared process-like runners; .NET naming/metadata drift checks, sanitizer-enabled worker/parser/codec tests, real TLS interoperability and signed MQTT board tests. See [scope and adaptations](command-processor-port-notes.md); arbitrary OpenSSL/Nmap CLI parity is not claimed. |
-| BLE broadcast/listen | `BleBroadcastConnect`, `BleBroadcastListenConnect`, shared `Objects/Connection/Ble` decoders | Shared passive scanner, bounded per-worker waiters, source-vector AD filter and production endpoint/AES tests, signed ESP-IDF build; physical RF/coexistence validation still required |
+| BLE broadcast/listen | `BleBroadcastConnect`, `BleBroadcastListenConnect`, shared `Objects/Connection/Ble` decoders | Shared continuous passive scanner, address history, immutable cycle snapshots, physical-unit averaging and source-vector decoder tests; see BLE validation below |
 
-The BLE endpoints share one NimBLE observer instead of starting a platform scan
-for each .NET connect. A fresh waiter is registered for each probe, so a stale
-advertisement cannot satisfy a later check. Protocol waiters use the shared immutable decoder registry. Victron admits
-all 13 supported record types for company `0x02E1`, matching the key-check byte
-when a key is supplied. Ruuvi RAWv2 and BTHome v2 select company `0x0499` and
-service data `0xFCD2` respectively. The shared
-scanner does no decryption or model mutation in its callback. Listen completion
-uses the .NET success-on-zero-captures rule; the bounded device message reports the count, while an owned PSRAM diagnostic
-contains complete raw captures, decoded readings/errors and the end reason. Service UUID selection and raw-payload
-overrides are supported, while scan-response-only fields are unavailable in
-passive mode. The bounded listen message is an embedded adaptation rather than
-byte-for-byte .NET output parity. See [decoder port and reproduction](ble-decoders.md)
-for supported layouts, key policies, vectors and remaining hardware checks.
+Both .NET and ESP32 now use one continuously running passive observer and a
+shared raw-packet history. At cycle start, enabled targeted `blebroadcast`
+monitors reserve twice their longest address-specific measurement window,
+including monitors skipped by scheduling. The model preserves an unset BLE
+timeout as zero. BLE endpoint policy resolves it to 7000 ms at execution and
+retention configuration; the 10x multiplier makes the default window 70 seconds. Explicit
+windows are not clamped to the ordinary endpoint deadline.
+
+Each cycle reads the immutable snapshot prepared at the previous cycle's end.
+The initial snapshot is empty. Targeted connects filter by address/protocol and
+snapshot timestamp, decode every matching advertisement in the window, average
+the selected metric in physical units, then encode the average once. Latest
+successfully decoded text remains the diagnostic. The scanner never decrypts
+or modifies model state. Controller duplicate filtering stays off. ESP32's
+buffer suppresses byte-identical same-address receptions less than 1000 ms after
+the last retained reception; changed payloads always pass. This optimisation is
+currently ESP32-only; .NET still retains every received advertisement.
+
+After all accepted probe jobs drain, publication and persistence are attempted;
+then the BLE service publishes a fresh snapshot before evicting unprotected
+addresses and protected packets older than twice their longest window. Raw
+`blebroadcastlisten` uses sequence numbers to return only advertisements newly
+captured for that snapshot, succeeds with zero captures, and does not reserve
+history, wait for a timeout, decrypt, or impose a capture limit. Legacy format,
+crypto and max-capture arguments are accepted but do not change raw collection.
+Payload/manufacturer/service filters and raw overrides remain available.
+
+ESP32 packet bytes, address histories, snapshot indexes and diagnostic buffers
+use PSRAM. Reference counts keep packets alive for existing readers even after
+live eviction or snapshot replacement; no borrowed mutable packet data escapes.
+A service mutex protects writes/publication, and readers copy immutable bytes.
+There is no configured capacity cap. Allocation failure preserves existing
+history and reports incomplete capture as a local inconclusive result rather
+than a false host-down observation. Failed snapshot allocation skips eviction;
+failed rule allocation skips all eviction until rules are rebuilt successfully.
+Packet-loss indication remains until the protected retention horizon expires.
+Memory/packet/snapshot/drop counters are available at DEBUG level per cycle. This policy is not
+an absolute memory bound in an arbitrarily busy RF environment.
+
+The ESP32 already drains its bounded worker pool before cycle completion;
+.NET instead attaches its snapshot to each asynchronous connect. These are
+platform-specific ownership mechanisms for the same immutable-cycle behaviour.
+Passive mode cannot obtain scan-response-only fields. See
+[decoder port and reproduction](ble-decoders.md) for layouts and validation.
 
 Explicit BLE metrics use fixed `BLE v2:<format>:<metric>` status labels across
 Victron, Ruuvi and BTHome. The typed selected reading is encoded in

@@ -1,4 +1,5 @@
 #include "endpoint_status.h"
+#include "ble_cycle.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "message_publish.h"
@@ -672,6 +673,9 @@ bool nm_esp_state_cycle(nm_esp_state *s, const nm_esp_config *config,
                  nm_model_reconcile(&next, config->app_id, when);
     valid = valid && nm_schedule_prepare(next.schedule, &next.infos, (int64_t)time(NULL));
     bool prepared = apply(s, &next, valid);
+    bool ble_prepared = nm_ble_cycle_begin(&s->core.infos);
+    if (!ble_prepared)
+        ESP_LOGE(TAG, "unable to configure BLE history retention");
     bool probes = prepared && (s->executor ? run_concurrent(s, config) : run_sequential(s, config));
     /* Delivery has priority over persistence. Never short-circuit either attempt.
      * Publication-time acknowledgements update RAM before the snapshot. */
@@ -682,5 +686,8 @@ bool nm_esp_state_cycle(nm_esp_state *s, const nm_esp_config *config,
     bool saved = nm_esp_state_save(s);
     if (!saved)
         ESP_LOGE(TAG, "cycle snapshot save failed; monitoring state retained in RAM");
-    return probes && saved && sent;
+    bool ble_saved = nm_ble_cycle_complete();
+    if (!ble_saved)
+        ESP_LOGE(TAG, "BLE snapshot allocation failed; history retained");
+    return probes && saved && sent && ble_prepared && ble_saved;
 }

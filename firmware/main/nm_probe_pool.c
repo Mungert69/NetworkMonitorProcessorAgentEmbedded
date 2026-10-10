@@ -68,12 +68,12 @@ static void job_free(probe_job *job)
     job->address = job->type = job->username = job->password = job->arguments = NULL;
 }
 
-/* nm_esp_endpoint_run only reads Address, EndPointType, Port and Timeout from
- * the monitor; build a stack record with just those to avoid sharing any
- * reference-counted model data with the processor task. */
+/* Build a stack record from owned job fields; include the host ID for
+ * diagnostics without sharing reference-counted model data across tasks. */
 static nm_esp_result execute(const probe_job *job)
 {
     nm_monitor_record monitor = {0};
+    monitor.MonitorIPID = job->monitor_id;
     monitor.Address = job->address;
     monitor.EndPointType = job->type;
     monitor.Username = job->username;
@@ -114,8 +114,7 @@ static bool pool_submit(void *context, int32_t monitor_id, uint64_t generation,
     pool_context *ctx = context;
     if (!monitor || !monitor->EndPointType ||
         (!monitor->Address && strcmp(monitor->EndPointType, "blebroadcastlisten")) ||
-        monitor_id < 0 ||
-        atomic_load(&ctx->in_flight) >= ctx->workers)
+        monitor_id < 0 || atomic_load(&ctx->in_flight) >= ctx->workers)
         return false;
     if ((monitor->Address && strlen(monitor->Address) > NM_PROBE_ADDRESS_MAX) ||
         (monitor->Username && strlen(monitor->Username) > NM_PROBE_ADDRESS_MAX) ||

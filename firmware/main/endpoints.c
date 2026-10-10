@@ -21,6 +21,10 @@ nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
         return invalid;
     if (monitor->Timeout < 0)
         return invalid;
+    if (!strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten")) {
+        /* BLE owns its lookback default; raw listen ignores the window. */
+        return nm_endpoint_check_ble(monitor, nm_ble_endpoint_window_ms(monitor->Timeout));
+    }
     unsigned timeout = (unsigned)monitor->Timeout, port = monitor->Port;
     if (timeout == 0)
         timeout = 10000;
@@ -37,7 +41,5 @@ nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
         return nm_endpoint_check_nmap(address, port, timeout);
     if (!strcmp(type, "quantum") || !strcmp(type, "quantumcert"))
         return nm_endpoint_check_quantum(address, type, port, timeout);
-    if (!strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten"))
-        return nm_endpoint_check_ble(monitor, timeout);
     return nm_endpoint_check_http(address, type, port, timeout);
 }

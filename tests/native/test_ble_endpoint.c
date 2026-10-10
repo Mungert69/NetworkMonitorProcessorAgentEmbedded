@@ -7,7 +7,7 @@
 
 static int64_t now_us;
 static nm_ble_advertisement packets[4];
-static size_t packet_count, next_packet;
+static size_t packet_count;
 static bool scanner_unavailable;
 
 int64_t esp_timer_get_time(void)
@@ -29,21 +29,14 @@ nm_esp_result nm_endpoint_local_failure(unsigned elapsed, const char *detail)
     snprintf(result.message, sizeof(result.message), "%s", detail);
     return result;
 }
-nm_ble_wait_result nm_ble_scanner_wait(const nm_ble_filter *filter, unsigned timeout,
-                                       nm_ble_advertisement *item)
+static nm_esp_result run_ble(const nm_monitor_record *monitor, uint64_t timeout)
 {
-    if (scanner_unavailable)
-        return NM_BLE_WAIT_UNAVAILABLE;
-    while (next_packet < packet_count) {
-        nm_ble_advertisement *candidate = &packets[next_packet++];
-        now_us += 1000;
-        if (nm_ble_advertisement_matches(candidate, filter)) {
-            *item = *candidate;
-            return NM_BLE_WAIT_FOUND;
-        }
-    }
-    now_us += (int64_t)timeout * 1000;
-    return NM_BLE_WAIT_TIMEOUT;
+    nm_ble_buffer_reset();
+    nm_ble_buffer_set_available(!scanner_unavailable);
+    for (size_t i = 0; i < packet_count; ++i)
+        nm_ble_buffer_receive(&packets[i], now_us);
+    nm_ble_buffer_complete_cycle(now_us);
+    return nm_endpoint_check_ble(monitor, timeout);
 }
 
 int mbedtls_base64_decode(unsigned char *out, size_t capacity, size_t *used,
@@ -65,7 +58,7 @@ int mbedtls_base64_decode(unsigned char *out, size_t capacity, size_t *used,
 static void reset_packets(void)
 {
     now_us = 0;
-    packet_count = next_packet = 0;
+    packet_count = 0;
     scanner_unavailable = false;
     memset(packets, 0, sizeof(packets));
 }
@@ -116,35 +109,33 @@ static void test_victron(void)
                                  .Password = "A00102030405060708090A0B0C0D0E0F",
                                  .Args = "--format victron --metric pv_power",
                                  .Timeout = 100};
-    nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
+    nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && !strcmp(result.status, "BLE v2:victron:pv_power"));
     assert(result.has_sample && result.sample == 123 && strstr(result.message, "PV power: 123 W"));
-    assert(next_packet == 2);
     reset_packets();
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 20);
+    result = run_ble(&monitor, 20);
     assert(!result.ok && !strcmp(result.status, "BLE Error"));
     scanner_unavailable = true;
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 20);
+    result = run_ble(&monitor, 20);
     assert(result.disposition == NM_PROBE_LOCAL_FAILURE);
     reset_packets();
     add_victron(key, 0x01);
     monitor.Password = NULL;
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 20);
+    result = run_ble(&monitor, 20);
     assert(!result.ok && !strcmp(result.status, "BLE Error"));
-    assert(strstr(result.message, "key is missing") && strstr(result.message, "monitor Password") &&
-           next_packet == 0);
+    assert(strstr(result.message, "key is missing") && strstr(result.message, "monitor Password"));
     monitor.Password = "ABCD";
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 20);
+    result = run_ble(&monitor, 20);
     assert(!result.ok && !strcmp(result.status, "BLE Error"));
-    assert(strstr(result.message, "16-byte AES-128 key") && next_packet == 0);
+    assert(strstr(result.message, "16-byte AES-128 key"));
     monitor.Password = "";
     monitor.Args = "";
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 20);
+    result = run_ble(&monitor, 20);
     assert(result.ok && !strcmp(result.status, "BLE broadcast received"));
     assert(strstr(result.message, "payload(manufacturer)="));
 }
@@ -154,22 +145,24 @@ static void test_listen(void)
     static const uint8_t key[16] = {0xa0};
     add_victron(key, 0x01);
     add_victron(key, 0x01);
+    packets[1].data[packets[1].data_length - 1] ^= 1; /* Distinct raw captures. */
     nm_monitor_record monitor = {
         .EndPointType = "blebroadcastlisten", .Args = "--max_captures 3", .Timeout = 30};
-    nm_esp_result result = nm_endpoint_check_ble(&monitor, 30);
+    nm_esp_result result = run_ble(&monitor, 30);
     assert(result.ok && !strcmp(result.status, "BLE listen complete"));
     assert(strstr(result.message, "captured 2 advertisement(s)"));
     assert(result.detail_message);
     assert(strstr(result.detail_message, "Capture"));
     assert(strstr(result.detail_message, "Address: AA:BB:CC:DD:EE:FF"));
     assert(strstr(result.detail_message, "Payload (raw): 13FFE10201"));
-    assert(strstr(result.detail_message, "Captured 2 advertisement(s). End reason: timeout"));
+    assert(strstr(result.detail_message,
+                  "Captured 2 advertisement(s). End reason: processor cycle complete"));
     nm_esp_result_release(&result);
     reset_packets();
     add_victron(key, 0x01);
     monitor.Address = "blebroadcastlisten"; /* Frontend-friendly display label. */
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 30);
+    result = run_ble(&monitor, 30);
     assert(result.ok && !strcmp(result.status, "BLE listen complete"));
     assert(strstr(result.message, "captured 1 advertisement(s)"));
     assert(result.detail_message && strstr(result.detail_message, "Capture"));
@@ -256,9 +249,8 @@ static void test_service_and_raw_override(void)
                                  .EndPointType = "blebroadcast",
                                  .Args = "--format raw --raw_payload 0xAABBCC",
                                  .Timeout = 100};
-    nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
+    nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && strstr(result.message, "payload(raw_input)=AABBCC"));
-    assert(next_packet == 0); /* No scanner call for a supplied payload. */
     reset_packets();
     add_victron((const uint8_t[16]){0xa0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, 0x01);
     char args[128] = "--format victron --raw_payload 0x";
@@ -271,15 +263,14 @@ static void test_service_and_raw_override(void)
     monitor.Password = "A00102030405060708090A0B0C0D0E0F";
     monitor.Args = args;
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 100);
+    result = run_ble(&monitor, 100);
     assert(result.ok && !strcmp(result.status, "BLE pv_power"));
-    assert(next_packet == 0);
     monitor.Address = NULL;
     monitor.EndPointType = "blebroadcastlisten";
     monitor.Password = "";
     monitor.Args = "--raw_payload AABBCC";
     nm_esp_result_release(&result);
-    result = nm_endpoint_check_ble(&monitor, 100);
+    result = run_ble(&monitor, 100);
     assert(result.ok && strstr(result.message, "captured 1 advertisement(s)"));
     assert(result.detail_message && strstr(result.detail_message, "raw payload provided"));
     assert(strstr(result.detail_message, "Payload (raw_input): AABBCC"));
@@ -324,7 +315,7 @@ static void test_changing_metric_readings(void)
         for (size_t sample = 0; sample < 2; ++sample) {
             reset_packets();
             add_victron_reading(key, 0x01, readings[sample]);
-            nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
+            nm_esp_result result = run_ble(&monitor, 100);
             char status[96];
             snprintf(status, sizeof(status), "BLE v2:victron:%s",
                      nm_ble_metric_canonical(cases[i].metric));
@@ -566,9 +557,10 @@ static void test_sensor_endpoints(void)
     nm_ble_advertisement *a = &packets[packet_count++];
     strcpy(a->address, "54:48:E6:8F:80:A5");
     a->data_length = from_hex("0A16D2FC4002C409037713", a->data);
-    nm_monitor_record monitor = {
-        .Address = "54:48:E6:8F:80:A5", .EndPointType = "blebroadcast", .Args = "--format bthome"};
-    nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
+    nm_monitor_record monitor = {.Address = "54:48:E6:8F:80:A5",
+                                 .EndPointType = "blebroadcast",
+                                 .Args = "--format bthome --metric temperature"};
+    nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && result.detail_message &&
            strstr(result.detail_message, "Temperature: 25 °C") &&
            strstr(result.detail_message, "Humidity: 49.83 %"));
@@ -578,8 +570,8 @@ static void test_sensor_endpoints(void)
     strcpy(a->address, "AA:BB:CC:DD:EE:FF");
     a->data_length = from_hex("1BFF99040512FC5394C37C0004FFFC040CAC364200CDCBB8334C884F", a->data);
     monitor.Address = a->address;
-    monitor.Args = "--format ruuvi";
-    result = nm_endpoint_check_ble(&monitor, 100);
+    monitor.Args = "--format ruuvi --metric temperature";
+    result = run_ble(&monitor, 100);
     assert(result.ok && strstr(result.detail_message, "RuuviTag"));
     nm_esp_result_release(&result);
     reset_packets();
@@ -587,15 +579,15 @@ static void test_sensor_endpoints(void)
     monitor.Address = NULL;
     monitor.EndPointType = "blebroadcastlisten";
     monitor.Args = "--format victron";
-    result = nm_endpoint_check_ble(&monitor, 100);
-    assert(result.ok && strstr(result.detail_message, "Decode error:") &&
-           strstr(result.detail_message, "key is missing") && strstr(result.message, "captured 1"));
+    result = run_ble(&monitor, 100);
+    assert(result.ok && strstr(result.detail_message, "Payload (raw):") &&
+           !strstr(result.detail_message, "Decode error:") && strstr(result.message, "captured 1"));
     nm_esp_result_release(&result);
     reset_packets();
     monitor.Args = "--format bthome --raw_payload D2FC41E445F3C9962B332211006C7C4519";
     monitor.Password = "231D39C1D7CC1AB1AEE224CD096DB932";
-    result = nm_endpoint_check_ble(&monitor, 100);
-    assert(result.ok && strstr(result.detail_message, "MAC address") &&
+    result = run_ble(&monitor, 100);
+    assert(result.ok && strstr(result.detail_message, "Payload (raw_input): D2FC41") &&
            !strstr(result.detail_message, "Temperature:"));
     nm_esp_result_release(&result);
 }
@@ -610,15 +602,15 @@ static void test_invalid_options(void)
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
         reset_packets();
         monitor.Args = (char *)invalid[i];
-        nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
-        assert(!result.ok && next_packet == 0);
+        nm_esp_result result = run_ble(&monitor, 100);
+        assert(!result.ok);
         nm_esp_result_release(&result);
     }
     reset_packets();
-    monitor.Args = "--format ruuvi";
+    monitor.Args = "--format ruuvi --metric temperature";
     monitor.Password = "00000000000000000000000000000000";
-    nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
-    assert(!result.ok && strstr(result.message, "unencrypted") && next_packet == 0);
+    nm_esp_result result = run_ble(&monitor, 100);
+    assert(!result.ok && strstr(result.message, "unencrypted"));
     nm_esp_result_release(&result);
 }
 
@@ -629,13 +621,13 @@ static void test_automatic_signed_metrics(void)
                                  .Args =
                                      "--format bthome --metric temperature --raw_payload 40020CFE",
                                  .Timeout = 100};
-    nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
+    nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && !strcmp(result.status, "BLE v2:bthome:temperature"));
     const nm_ble_metric_encoding *e = nm_ble_metric_find("bthome", "temperature");
     assert(fabs(result.sample * e->scale + e->offset - (-5)) <= e->scale / 2);
     nm_esp_result_release(&result);
     monitor.Args = "--format bthome --metric missing --raw_payload 40020CFE";
-    result = nm_endpoint_check_ble(&monitor, 100);
+    result = run_ble(&monitor, 100);
     assert(!result.ok && !strcmp(result.status, "BLE Metric Error"));
     nm_esp_result_release(&result);
 }
@@ -648,14 +640,14 @@ static void test_implicit_metric_and_args(void)
                                  .Args = "--format victron"};
     reset_packets();
     add_victron(key, 0x01);
-    nm_esp_result result = nm_endpoint_check_ble(&monitor, 100);
+    nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && result.has_sample && result.sample == 123);
-    assert(result.elapsed_ms == 1 && !strcmp(result.status, "BLE pv_power"));
+    assert(!strcmp(result.status, "BLE pv_power"));
     nm_esp_result_release(&result);
     reset_packets();
     uint8_t unavailable[12] = {0, 0, 0xd2, 0x04, 0x19, 0, 0x2c, 0x01, 0xff, 0xff, 0x1e, 0};
     add_victron_reading(key, 0x01, unavailable);
-    result = nm_endpoint_check_ble(&monitor, 100);
+    result = run_ble(&monitor, 100);
     assert(!result.ok && !result.has_sample && !strcmp(result.status, "BLE Metric Error"));
     nm_esp_result_release(&result);
     const char *valid[] = {
@@ -666,14 +658,14 @@ static void test_implicit_metric_and_args(void)
     for (size_t i = 0; i < sizeof(valid) / sizeof(valid[0]); ++i) {
         reset_packets();
         monitor.Args = (char *)valid[i];
-        result = nm_endpoint_check_ble(&monitor, 100);
+        result = run_ble(&monitor, 100);
         assert(result.ok && result.has_sample &&
                !strcmp(result.status, "BLE v2:bthome:temperature"));
         nm_esp_result_release(&result);
     }
     monitor.Args = "   ";
     monitor.Username = (char *)valid[0];
-    result = nm_endpoint_check_ble(&monitor, 100);
+    result = run_ble(&monitor, 100);
     assert(result.ok && result.has_sample);
     nm_esp_result_release(&result);
     monitor.Username = NULL;
@@ -683,8 +675,8 @@ static void test_implicit_metric_and_args(void)
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
         reset_packets();
         monitor.Args = (char *)invalid[i];
-        result = nm_endpoint_check_ble(&monitor, 100);
-        assert(!result.ok && next_packet == 0);
+        result = run_ble(&monitor, 100);
+        assert(!result.ok);
         nm_esp_result_release(&result);
     }
     monitor.EndPointType = "blebroadcastlisten";
@@ -692,32 +684,93 @@ static void test_implicit_metric_and_args(void)
     monitor.Args =
         "--format aesgcm --raw_payload "
         "0000000000000000000000000388DACE60B6A392F328C2B971B2FE78AB6E47D42CEC13BDF53A67B21257BDDF";
-    result = nm_endpoint_check_ble(&monitor, 100);
+    result = run_ble(&monitor, 100);
     assert(result.ok && !result.has_sample && result.detail_message);
-    assert(strstr(result.detail_message,
-                  "Selected payload (raw_input): 00000000000000000000000000000000"));
+    assert(strstr(result.detail_message, "Payload (raw_input): 0000000000000000000000000388DACE"));
     nm_esp_result_release(&result);
     monitor.Args =
         "--format aesgcm --raw_payload "
         "0000000000000000000000000388DACE60B6A392F328C2B971B2FE78AB6E47D42CEC13BDF53A67B21257BDDE";
-    result = nm_endpoint_check_ble(&monitor, 100);
-    assert(result.ok && strstr(result.detail_message, "decryption failed, showing raw"));
+    result = run_ble(&monitor, 100);
+    assert(result.ok && strstr(result.detail_message, "Payload (raw_input):"));
     nm_esp_result_release(&result);
     monitor.Password = NULL;
     monitor.Args = "--format bthome --metric temperature";
-    result = nm_endpoint_check_ble(&monitor, 100);
-    assert(!result.ok && next_packet == 0);
+    result = run_ble(&monitor, 100);
+    assert(!result.ok);
     nm_esp_result_release(&result);
     reset_packets();
     monitor.Args = "--format raw --max_captures 1";
-    result = nm_endpoint_check_ble(&monitor, 70009);
-    assert(result.ok && !result.has_sample && result.elapsed_ms == 70009);
-    assert(nm_esp_result_sample("blebroadcastlisten", &result) == 7000);
+    result = run_ble(&monitor, 70009);
+    assert(result.ok && !result.has_sample && result.elapsed_ms == 0);
+    assert(nm_esp_result_sample("blebroadcastlisten", &result) == 0);
     nm_esp_result_release(&result);
+}
+
+static void test_window_averaging(void)
+{
+    static const uint8_t key[16] = {0xa0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    const uint8_t low[12] = {0, 0, 0x14, 0x05, 0xf5, 0xff, 0, 0, 10, 0, 0, 0};
+    const uint8_t high[12] = {0, 0, 0x28, 0x05, 0xf7, 0xff, 0, 0, 30, 0, 0, 0};
+    reset_packets();
+    add_victron_reading(key, 1, low);
+    add_victron_reading(key, 1, high);
+    nm_ble_buffer_reset();
+    nm_ble_buffer_set_available(true);
+    nm_ble_buffer_rules_begin();
+    assert(nm_ble_buffer_protect(packets[0].address, 70000));
+    assert(nm_ble_buffer_receive(&packets[1], 0)); /* excluded: 70s plus 1us old */
+    assert(nm_ble_buffer_receive(&packets[0], 1)); /* included: exact boundary */
+    assert(nm_ble_buffer_receive(&packets[1], 60000001));
+    assert(nm_ble_buffer_complete_cycle(70000001));
+    nm_monitor_record monitor = {.Address = "AA:BB:CC:DD:EE:FF",
+                                 .EndPointType = "blebroadcast",
+                                 .Password = "A00102030405060708090A0B0C0D0E0F",
+                                 .Args = "--format victron --metric battery_current"};
+    nm_esp_result result = nm_endpoint_check_ble(&monitor, 70000);
+    uint16_t expected;
+    assert(nm_ble_metric_encode(nm_ble_metric_find("victron", "battery_current"), -1.0, &expected));
+    assert(result.ok && result.sample == expected);
+    assert(
+        strstr(result.detail_message, "Battery current: -0.9 A")); /* latest, not averaged text */
+    nm_esp_result_release(&result);
+    monitor.Args = "--format victron --metric battery_voltage";
+    result = nm_endpoint_check_ble(&monitor, 70000);
+    assert(nm_ble_metric_encode(nm_ble_metric_find("victron", "battery_voltage"), 13.1, &expected));
+    assert(result.ok && result.sample == expected);
+    nm_esp_result_release(&result);
+    monitor.EndPointType = "blebroadcastlisten";
+    monitor.Args = NULL;
+    result = nm_endpoint_check_ble(&monitor, 1);
+    assert(result.ok && strstr(result.message, "captured 3 advertisement"));
+    nm_esp_result_release(&result);
+    assert(nm_ble_buffer_complete_cycle(80000000));
+    result = nm_endpoint_check_ble(&monitor, 1);
+    assert(result.ok && strstr(result.message, "captured 0 advertisement"));
+    nm_esp_result_release(&result);
+    /* More than the previous capture cap, legacy cap is ignored. */
+    monitor.Args = "--format victron --max_captures 1";
+    for (int i = 0; i < 80; ++i) {
+        /* Distinct raw payloads bypass the deliberate one-second repeat filter. */
+        packets[0].data[packets[0].data_length - 1] = (uint8_t)i;
+        assert(nm_ble_buffer_receive(&packets[0], 80000000 + i));
+    }
+    assert(nm_ble_buffer_complete_cycle(90000000));
+    result = nm_endpoint_check_ble(&monitor, 1);
+    assert(result.ok && strstr(result.message, "captured 80 advertisement"));
+    nm_esp_result_release(&result);
+    monitor.EndPointType = "blebroadcast";
+    monitor.Args = "--format victron --metric pv_power";
+    assert(nm_ble_buffer_complete_cycle(300000000));
+    result = nm_endpoint_check_ble(&monitor, 70000);
+    assert(!result.ok && !result.has_sample);
+    nm_esp_result_release(&result);
+    nm_ble_buffer_reset();
 }
 
 int main(void)
 {
+    test_window_averaging();
     test_implicit_metric_and_args();
     test_automatic_signed_metrics();
     test_invalid_options();
@@ -729,6 +782,7 @@ int main(void)
     test_aes_vectors();
     test_service_and_raw_override();
     test_changing_metric_readings();
+    nm_ble_buffer_reset();
     puts("BLE endpoint/decryption tests passed");
     return 0;
 }

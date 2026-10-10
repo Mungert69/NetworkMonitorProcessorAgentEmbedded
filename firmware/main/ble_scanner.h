@@ -11,6 +11,7 @@ enum { NM_BLE_ADDRESS_TEXT_SIZE = 18, NM_BLE_ADVERTISEMENT_MAX = 255 };
 typedef struct {
     char address[NM_BLE_ADDRESS_TEXT_SIZE];
     int8_t rssi;
+    uint64_t capture_id; /* Diagnostic ID assigned once at the discovery callback. */
     uint8_t data[NM_BLE_ADVERTISEMENT_MAX];
     size_t data_length;
 } nm_ble_advertisement;
@@ -23,19 +24,7 @@ typedef struct {
     uint8_t key_check;
 } nm_ble_filter;
 
-typedef enum {
-    NM_BLE_WAIT_FOUND,
-    NM_BLE_WAIT_TIMEOUT,
-    NM_BLE_WAIT_UNAVAILABLE,
-    NM_BLE_WAIT_CAPACITY
-} nm_ble_wait_result;
-
 /* Starts NimBLE once and keeps one passive scan active for all BLE monitors. */
 bool nm_ble_scanner_start(void);
-
-/* Wait for an advertisement from this address. Each concurrent caller gets
- * its own bounded waiter; the scanner itself is shared. */
-nm_ble_wait_result nm_ble_scanner_wait(const nm_ble_filter *filter, unsigned timeout_ms,
-                                       nm_ble_advertisement *advertisement);
 
 #endif

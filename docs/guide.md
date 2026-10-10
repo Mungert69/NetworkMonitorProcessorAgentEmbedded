@@ -312,19 +312,22 @@ never stage `merged-binary.bin`, NVS images, or private keys.
 `./tools/build-firmware.sh` builds both BLE endpoints into the normal signed
 OTA image. One NimBLE host runs a passive scan with 50 ms interval/window and
 Wi-Fi/BLE coexistence; hardware/radio arbitration still determines the actual
-listening time. Duplicate filtering is off so a later advertisement can satisfy
-a fresh probe. NimBLE callbacks copy only matching packets into one bounded
-one-item queue per probe worker; decryption and model updates run outside the
-callback. Scan diagnostics are rate-limited and never log encrypted payloads.
+listening time. Duplicate filtering is off so every received advertisement can contribute to
+an average. The callback stores raw packets by address in PSRAM; connects read
+an immutable snapshot prepared at the end of the previous processor cycle.
+Targeted `blebroadcast` defaults to a 70-second measurement window (7000 ms
+base timeout times 10), reserving 140 seconds of history per address. The
+longest enabled window wins when monitors share an address.
 
-`blebroadcast` requires a MAC address. `blebroadcastlisten` ignores its Address
-field, which can remain a frontend label, and counts captures up to
-`--max_captures` (default 10, limit 50) or the
-monitor timeout, returning success even at zero captures like .NET. The 256-byte
-monitor message reports the count; the owned PSRAM diagnostic contains complete
-raw advertisements, decoded readings/errors and the end reason. This is a
-deliberate embedded-size adaptation. Set a timeout
-longer than the beacon interval (for a 60-second Victron beacon, use over 60 s).
+`blebroadcastlisten` ignores its Address label and returns newly captured raw
+advertisements each cycle, including zero captures. It has no wait or capture
+limit and never decrypts. Legacy format/crypto/max-capture options are accepted
+but ignored; payload/manufacturer/service selectors still filter output.
+The 256-byte message reports the count; the complete diagnostic uses PSRAM.
+Snapshot publication precedes eviction of unprotected and expired packets.
+See [continuous BLE policy](monitoring-parity.md) for memory ownership and
+allocation-failure behaviour. Scan diagnostics never log encrypted payloads.
+
 Existing provisioned devices retain their stored appsettings, so an OTA image
 alone does not remove an older explicit `blebroadcastlisten` disable entry;
 update/reprovision that configuration before assigning such a monitor.

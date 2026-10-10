@@ -119,7 +119,7 @@ nm_nmap_arp_result nm_nmap_arp_probe(uint32_t ipv4, unsigned timeout_ms,
 }
 static unsigned select_calls;
 static const nm_monitor_record *ble_monitor_seen;
-static unsigned ble_timeout_seen;
+static uint64_t ble_timeout_seen;
 nm_esp_result nm_endpoint_check_quantum(const char *host, const char *type, unsigned port,
                                         unsigned timeout)
 {
@@ -129,7 +129,7 @@ nm_esp_result nm_endpoint_check_quantum(const char *host, const char *type, unsi
     (void)timeout;
     return (nm_esp_result){.ok = true};
 }
-nm_esp_result nm_endpoint_check_ble(const nm_monitor_record *monitor, unsigned timeout)
+nm_esp_result nm_endpoint_check_ble(const nm_monitor_record *monitor, uint64_t timeout)
 {
     ble_monitor_seen = monitor;
     ble_timeout_seen = timeout;
@@ -1118,6 +1118,12 @@ int main(void)
     nm_esp_result ble_result = nm_esp_endpoint_run(&ble);
     assert(ble_result.ok && ble_result.elapsed_ms == 23);
     assert(ble_monitor_seen == &ble && ble_timeout_seen == 750000);
+    ble.Timeout = 0;
+    assert(nm_esp_endpoint_run(&ble).ok && ble_timeout_seen == 70000);
+    ble.Timeout = 8640000;
+    assert(nm_esp_endpoint_run(&ble).ok && ble_timeout_seen == 86400000);
+    ble.Timeout = INT32_MAX;
+    assert(nm_esp_endpoint_run(&ble).ok && ble_timeout_seen == UINT64_C(21474836470));
     nm_monitor_record listen = {.EndPointType = "blebroadcastlisten", .Timeout = 25000};
     assert(nm_esp_endpoint_run(&listen).ok);
     assert(ble_monitor_seen == &listen && ble_timeout_seen == 250000);

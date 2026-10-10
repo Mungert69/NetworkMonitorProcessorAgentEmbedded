@@ -14,6 +14,7 @@
  *   -lbrotlienc -lbrotlidec -lbrotlicommon -lcrypto -lm -o /tmp/test_state_adapter
  */
 #include "nm_esp.h"
+#include "ble_buffer.h"
 #include <math.h>
 #include "message_publish.h"
 #include "nm_probe_pool.h"
@@ -174,6 +175,7 @@ static void cleanup(void)
 static void reset(void)
 {
     cleanup();
+    nm_ble_buffer_reset();
     save_calls = fail_save_at = 0;
     cycle_active = false;
     observed_executor = NULL;
@@ -1224,6 +1226,34 @@ static void test_registration_handoff_snapshot(void)
     yyjson_mut_doc_free(reply);
 }
 
+static void test_ble_cycle_buffer(void)
+{
+    reset();
+    nm_esp_state *s =
+        initialized("{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"AA:BB:CC:DD:EE:FF\","
+                    "\"EndPointType\":\"blebroadcast\",\"Enabled\":true,\"SkipCycles\":10}]}");
+    nm_ble_advertisement packet = {
+        .address = "AA:BB:CC:DD:EE:FF", .data_length = 3, .data = {2, 1, 6}};
+    CHECK(!nm_ble_buffer_acquire()); /* first cycle begins with no snapshot */
+    CHECK(nm_ble_buffer_receive(&packet, nm_ble_buffer_now_us() - 100000000));
+    strcpy(packet.address, "11:22:33:44:55:66");
+    CHECK(nm_ble_buffer_receive(&packet, nm_ble_buffer_now_us()));
+    CHECK(cycle(s));
+    CHECK(number(info(), "Timeout") == 0); /* default belongs to the BLE endpoint */
+    nm_ble_snapshot *first = nm_ble_buffer_acquire();
+    CHECK(nm_ble_snapshot_count(first) == 2);
+    CHECK(cycle(s)); /* skipped targeted monitor still protects old history */
+    nm_ble_snapshot *second = nm_ble_buffer_acquire();
+    CHECK(nm_ble_snapshot_count(second) == 1);
+    nm_ble_advertisement copy;
+    CHECK(nm_ble_snapshot_read(second, 0, &copy, NULL, NULL));
+    CHECK(!strcmp(copy.address, "AA:BB:CC:DD:EE:FF"));
+    nm_ble_snapshot_release(first);
+    nm_ble_snapshot_release(second);
+    nm_esp_state_free(s);
+    nm_ble_buffer_reset();
+}
+
 /* Actual sequential/concurrent state publication: durations scale once,
  * sensor values bypass timing scale, failure retains 65535 and counters. */
 static void test_measurement_limits(void)
@@ -1231,7 +1261,7 @@ static void test_measurement_limits(void)
     for (unsigned concurrent = 0; concurrent < 2; ++concurrent) {
         reset();
         nm_esp_state *s = initialized(
-            "{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"device\",\"EndPointType\":\"blebroadcast\","
+            "{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"AA:BB:CC:DD:EE:FF\",\"EndPointType\":\"blebroadcast\","
             "\"Enabled\":true,\"LowThreshold\":-1,\"HighThreshold\":2}]}");
         if (concurrent)
             nm_esp_state_set_probe_executor(s, fake_executor_new(1, false, false));
@@ -1279,8 +1309,9 @@ static void test_measurement_samples(void)
             reset();
             char init[256];
             snprintf(init, sizeof(init),
-                     "{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"example.test\","
+                     "{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"%s\","
                      "\"EndPointType\":\"%s\",\"Enabled\":true}]}",
+                     !strcmp(types[t], "blebroadcast") ? "AA:BB:CC:DD:EE:FF" : "example.test",
                      types[t]);
             nm_esp_state *s = initialized(init);
             if (concurrent)
@@ -1319,7 +1350,8 @@ int main(int argc, char **argv)
     const struct {
         const char *name;
         void (*run)(void);
-    } tests[] = {{"measurement_limits", test_measurement_limits},
+    } tests[] = {{"ble_cycle_buffer", test_ble_cycle_buffer},
+                 {"measurement_limits", test_measurement_limits},
                  {"measurement_samples", test_measurement_samples},
                  {"base64", test_base64},
                  {"registration_handoff_snapshot", test_registration_handoff_snapshot},
