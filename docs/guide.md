@@ -310,10 +310,13 @@ never stage `merged-binary.bin`, NVS images, or private keys.
 ### BLE broadcast monitoring
 
 `./tools/build-firmware.sh` builds both BLE endpoints into the normal signed
-OTA image. One NimBLE host runs a passive scan with 50 ms interval/window and
+OTA image. One NimBLE host runs a passive scan with a 100 ms interval and
+50 ms window (50% configured duty), with
 Wi-Fi/BLE coexistence; hardware/radio arbitration still determines the actual
-listening time. Duplicate filtering is off so every received advertisement can contribute to
-an average. The callback stores raw packets by address in PSRAM; connects read
+listening time. Controller duplicate filtering is off. The buffer suppresses
+byte-identical same-address repeats received within 1000 ms of the last retained
+packet; changed payloads always pass. Retained advertisements contribute to
+the average. The callback stores raw packets by address in PSRAM; connects read
 an immutable snapshot prepared at the end of the previous processor cycle.
 Targeted `blebroadcast` defaults to a 70-second measurement window (7000 ms
 base timeout times 10), reserving 140 seconds of history per address. The

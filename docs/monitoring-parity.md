@@ -65,7 +65,7 @@ successfully decoded text remains the diagnostic. The scanner never decrypts
 or modifies model state. Controller duplicate filtering stays off. ESP32's
 buffer suppresses byte-identical same-address receptions less than 1000 ms after
 the last retained reception; changed payloads always pass. This optimisation is
-currently ESP32-only; .NET still retains every received advertisement.
+also implemented in .NET (`NetworkMonitorLib` commit `3eaae55`).
 
 After all accepted probe jobs drain, publication and persistence are attempted;
 then the BLE service publishes a fresh snapshot before evicting unprotected
