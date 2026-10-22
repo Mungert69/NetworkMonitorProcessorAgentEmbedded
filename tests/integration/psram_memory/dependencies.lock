@@ -4,7 +4,7 @@ dependencies:
     source:
       path: ../../../firmware/managed_components/espressif__brotli
       type: local
-    version: 1.2.0
+    version: 1.2.1
   espressif/mqtt:
     component_hash: fb18bc3b65aa8c94693a9811ffc322cca8a65d92d5ec84983d3e385080e3969c
     dependencies:
@@ -23,6 +23,6 @@ direct_dependencies:
 - espressif/brotli
 - espressif/mqtt
 - idf
-manifest_hash: bd63a649585d06bb7a7367abf0172d23d0c0c2ec5d2868763b31b22e46ad90be
+manifest_hash: 0495ae18bd155225efd51da1e3bc9f9315989e7046a1ee1b6e547e8a75ab13e2
 target: esp32s3
 version: 3.0.0

@@ -8,8 +8,8 @@ existing registered processors need re-registration to refresh capabilities.
 Do not distribute the diagnostic firmware: its generated hardware
 configuration contains private Wi-Fi credentials.
 
-The pinned wolfSSL submodule is v5.9.2-stable, commit
-`ac01707f552c611fbd135cc723b2682b3e7f80f2`. It is GPLv3/commercial licensed;
+The pinned wolfSSL submodule is v5.9.4-stable, commit
+`3c5eead44904df64e6a5a1f4ebdce377d35a849a`. It is GPLv3/commercial licensed;
 the project's GPL-3.0-only license does not relicense wolfSSL or waive its
 copyright notices. Follow the [firmware release licensing checklist](../../../docs/licensing.md)
 before distributing a combined image.

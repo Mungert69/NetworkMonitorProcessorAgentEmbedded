@@ -4,10 +4,15 @@ The firmware keeps the upstream `BrotliEncoderCompress` API, quality zero,
 standard Brotli stream format and existing base64/message envelopes. No backend
 or application compression algorithm is replaced.
 
-`cmake/brotli-quality-zero.cmake` specializes the pinned espressif/brotli 1.2.0
+`cmake/brotli-quality-zero.cmake` specializes the pinned espressif/brotli 1.2.1
 encoder after dependency setup. `tools/specialize_brotli.py` verifies the exact
 upstream `encode.c` SHA-256 and generates a build-directory copy. Managed source
 is never edited. A dependency change fails configuration until reviewed.
+
+The 1.2.1 registry archive omits three pkg-config input templates that upstream
+CMake reads even when installation is disabled. `cmake/prepare-brotli-pkgconfig.cmake`
+restores these metadata files from reviewed project copies during configuration.
+The workaround checks the component version and must be reviewed for later pins.
 
 The generated encoder defaults to quality zero, rejects non-zero quality and
 prepared dictionaries, and exposes constant quality to the compiler. It omits

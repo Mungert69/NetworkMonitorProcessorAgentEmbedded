@@ -82,7 +82,7 @@ def package(version: str, sbom: pathlib.Path, output: pathlib.Path) -> pathlib.P
             f"Project commit: {commit}",
             "ESP-IDF: v6.1, commit fff9895c82d744c7237be8847347bdd1b07c6643",
             *submodule_lines,
-            "espressif/brotli: 1.2.0, verified against bundled CHECKSUMS.json",
+            "espressif/brotli: 1.2.1, verified against bundled CHECKSUMS.json",
             "espressif/mqtt: 1.1.0, verified against bundled CHECKSUMS.json",
             "See THIRD_PARTY_NOTICES.md for license terms and source locations.",
         ]

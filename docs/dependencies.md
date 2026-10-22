@@ -1,6 +1,6 @@
 # Dependency update policy
 
-Keep ESP-IDF and its managed components pinned. `firmware/idf_component.yml`
+Keep ESP-IDF and its managed components pinned. `firmware/main/idf_component.yml`
 selects the Brotli and MQTT component versions; `firmware/dependencies.lock`
 records the resolved packages and integrity hashes. `third_party/yyjson` is a
 Git submodule pinned by the parent commit. Pins make builds reproducible, not
@@ -49,3 +49,10 @@ closure, then run the sanitizer-backed quality-zero parity tests described in
 [`brotli-quality-zero.md`](brotli-quality-zero.md). The decoder and wire format
 must remain compatible with .NET. Never bypass the source hash to make an
 upgrade pass.
+
+The Brotli 1.2.1 registry archive omits three pkg-config templates required
+by its own CMake configuration. The project restores reviewed copies during
+firmware, host and PSRAM test configuration; see
+[`brotli-quality-zero.md`](brotli-quality-zero.md). The helper checks for
+version 1.2.1 and stops on a later pin until the package and workaround are
+reviewed. Keep the templates and the component lockfiles aligned when updating.
