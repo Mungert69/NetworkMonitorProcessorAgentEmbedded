@@ -444,6 +444,33 @@ static void test_fresh_disabled(void)
     yyjson_mut_doc_free(wire);
     nm_esp_state_free(s);
 }
+static void test_publication_refreshes_dataset_end(void)
+{
+    reset();
+    nm_esp_state *s = initialized(one_disabled);
+    nm_esp_state_free(s);
+    yyjson_mut_doc *saved = storage[0].doc;
+    yyjson_mut_val *record = info();
+    CHECK(yyjson_mut_obj_put(record, yyjson_mut_str(saved, "DateEnded"),
+                             yyjson_mut_str(saved, "2022-01-01T00:00:00Z")));
+    s = nm_esp_state_new(&config);
+    CHECK(s);
+    CHECK(cycle(s) && probe_count == 0);
+    const char *start = yyjson_mut_get_str(GET(info(), "DateStarted"));
+    const char *end = yyjson_mut_get_str(GET(info(), "DateEnded"));
+    CHECK(start && end && strcmp(end, start) >= 0 && strcmp(end, "2022-01-01T00:00:00Z") > 0);
+    yyjson_mut_doc *wire = decode(message_count - 1);
+    CHECK(yyjson_mut_equals_str(GET(AT(GET(ROOT(wire), "MonitorPingInfos"), 0), "DateEnded"), end));
+    yyjson_mut_doc_free(wire);
+    yyjson_mut_doc *request = parse("{\"Reset\":true}");
+    CHECK(nm_esp_state_init(s, &config, ROOT(request)));
+    yyjson_mut_doc_free(request);
+    clear_messages();
+    CHECK(cycle(s) && probe_count == 0);
+    CHECK(strcmp(yyjson_mut_get_str(GET(info(), "DateEnded")),
+                 yyjson_mut_get_str(GET(info(), "DateStarted"))) >= 0);
+    nm_esp_state_free(s);
+}
 static void test_live_defaults(void)
 {
     reset();
@@ -1362,6 +1389,7 @@ int main(int argc, char **argv)
                  {"storage_clones", test_storage_clones},
                  {"legacy_migration", test_legacy_migration},
                  {"fresh_disabled", test_fresh_disabled},
+                 {"publication_refreshes_dataset_end", test_publication_refreshes_dataset_end},
                  {"orphan_boot_refused", test_orphan_boot_refused},
                  {"saved_host_rebuilds_parent", test_saved_host_rebuilds_parent},
                  {"live_defaults", test_live_defaults},

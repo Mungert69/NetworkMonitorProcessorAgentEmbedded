@@ -40,6 +40,7 @@ samples retain their protocol catalogue encoding.
 | Signed 32-bit monitor IDs and counters | `MonitorIP.cs`, `MonitorPingInfo.cs`, `StatusObj.cs` | Invalid ranges/types rejected; defined unchecked counter arithmetic |
 | Acknowledgements | `MonitorPingProcessor.ProcessesMonitorReturnData`, `MonitorPingCollection.RemovePingInfosFromPingInfos` | Exact ping ID matching; removal IDs; swap comparer ID-only semantics |
 | Configuration and dataset reset | `MonitorPingCollection.FillPingInfo`, `Zero`; `MonitorPingProcessor.Init` | CLR defaults rather than patch semantics, reset ordering, preserved status/metadata |
+| Dataset publication end | `PublishRepo.MonitorPingInfos` | Every dataset's `DateEnded` is refreshed to the current UTC publication time in a copy-on-write candidate before encoding; the same candidate is saved after publication. Reset advances `DateStarted` and the next publication refreshes the end, including empty and paused cycles. |
 | Alert transitions | `Merge`, `UpdateAlertFlag`, `UpdateAlertSent`, `ResetAlerts` | Success/failure/dirty-downcount transitions and persisted flags |
 | Scheduling | `ConfigurableEndpointFilterStrategy`, `NetConnectCollection.GetFilteredNetConnects` | Skip overrides, counter modes, probability boundaries, daily gates, persistence |
 | Endpoint status | `HTTPConnect`, `ICMPConnect`, `DNSConnect`, `SocketConnect`, `NetConnect.ProcessStatus` | HTTP enum names, failure statuses, ushort RTT conversion |

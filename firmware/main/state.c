@@ -439,6 +439,15 @@ static bool publish_all(nm_esp_state *s, const nm_esp_config *config,
     nm_model_close(&snapshot);
     return alerts && data && current;
 }
+static bool refresh_publication_dates(nm_esp_state *s)
+{
+    nm_model next = {0};
+    char when[32];
+    timestamp(when);
+    if (!nm_model_clone(&next, &s->core))
+        return false;
+    return apply(s, &next, nm_model_publication_date(&next, when));
+}
 
 static double schedule_random(void *context)
 {
@@ -683,7 +692,8 @@ bool nm_esp_state_cycle(nm_esp_state *s, const nm_esp_config *config,
     bool probes = prepared && (s->executor ? run_concurrent(s, config) : run_sequential(s, config));
     /* Delivery has priority over persistence. Never short-circuit either attempt.
      * Publication-time acknowledgements update RAM before the snapshot. */
-    bool sent = publish_all(s, config, client);
+    bool dated = refresh_publication_dates(s);
+    bool sent = dated && publish_all(s, config, client);
     /* Exactly one snapshot attempt per cycle, after all accepted probe jobs drain.
      * Save even empty/paused/failed cycles. No per-probe or acknowledgement writes.
      * A failed save preserves RAM results and the previous durable snapshot. */
@@ -693,5 +703,5 @@ bool nm_esp_state_cycle(nm_esp_state *s, const nm_esp_config *config,
     bool ble_saved = nm_ble_cycle_complete();
     if (!ble_saved)
         ESP_LOGE(TAG, "BLE snapshot allocation failed; history retained");
-    return probes && saved && sent && ble_prepared && ble_saved;
+    return probes && dated && saved && sent && ble_prepared && ble_saved;
 }

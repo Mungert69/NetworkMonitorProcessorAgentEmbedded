@@ -126,6 +126,9 @@ bool nm_model_ack(nm_model *, yyjson_mut_val *);
 bool nm_model_alert(nm_model *, const char *, yyjson_mut_val *, const char *);
 bool nm_model_user_event(nm_model *, yyjson_mut_val *);
 bool nm_model_reconcile(nm_model *, const char *, const char *);
+/* Borrowed UTC timestamp. Mutates only a disposable candidate; failure leaves
+ * the caller responsible for discarding it. Refresh every published dataset. */
+bool nm_model_publication_date(nm_model *, const char *when);
 /* Metadata strings are borrowed and copied into a latched breach. Call on a
  * disposable candidate; allocation failure must abort that candidate. */
 bool nm_model_measurement_alert(nm_model *, int32_t id, uint16_t sample, double scale,

@@ -15,7 +15,7 @@ of the "no data returned" symptom and the one that requires a firmware change.
 
 | # | Component | Defect | Effect |
 |---|---|---|---|
-| 1 | This repository (ESP32 agent) | `MonitorPingInfo.DateEnded` is written once at host creation and never refreshed | Date-range queries against this agent's hosts return no rows; dataset intervals are inverted |
+| 1 | This repository (ESP32 agent) | `MonitorPingInfo.DateEnded` is initialized with a new record but never refreshed by probes or publication | Recent date-range queries can return no rows; after a reset, dataset intervals can be inverted |
 | 2 | `NetworkMonitorLib` (shared query model) | `MonitorPingInfoQuery.DateEnd` getter silently replaces a requested end bound with `start + 6h` | Every narrow-window query is widened by six hours at the tail, and the caller is told the widened bound was what it asked for |
 
 Defect 1 additionally causes the API to disagree with the chart for the same host
@@ -37,31 +37,23 @@ and window: the chart shows readings that the API cannot return.
 332:            TRY(MSTR(info, DateStarted, when));   /* dataset reset */
 ```
 
-`DateEnded` is assigned in exactly two places in the entire firmware, both in
-`monitor_model.c`:
+Before the fix, `DateEnded` was assigned in one place in the firmware:
 
-- `fill()` (line 170) — writes `DateStarted` and `DateEnded` to the same value,
-  and only when the host record is first created.
-- the dataset-reset path (line 332) — updates `DateStarted` only.
+- `fill()` (line 170) — writes `DateStarted` and `DateEnded` to the same value
+  when creating a fresh record. An imported or swapped record can carry its
+  existing `DateEnded` instead.
 
-There is no third assignment anywhere in `firmware/`. Confirmed by exhaustive
-search across the whole repository:
+The dataset-reset path (line 332) updates `DateStarted` only.
+
+No probe or publication path assigned it before the fix. The current search is:
 
 ```sh
-grep -rn "DateEnded" --exclude-dir=.git .
+rg -n 'DateEnded' firmware/main tests/reference tests/native
 ```
 
-which yields only:
-
-```
-firmware/main/monitor_model.c:170:    TRY(MSTR(info, DateStarted, when) && MSTR(info, DateEnded, when) && ...
-firmware/main/monitor_model.h:45:      X(char *, DateEnded, STRING)       \
-tests/reference/monitor_core.c:234:    TRY(text(c,info,"DateStarted",when) && text(c,info,"DateEnded",when));
-```
-
-So on this agent, `DateEnded` is frozen at the moment the host was first
-enrolled. It is never advanced, while `DateStarted` advances on every dataset
-rollover.
+Before the fix, a fresh record's `DateEnded` stayed at creation time while
+`DateStarted` advanced on dataset reset. Imported records retained their
+supplied end date.
 
 ### Divergence from the reference implementation
 
@@ -88,10 +80,9 @@ private void Zero(MonitorPingInfo monitorPingInfo)
     monitorPingInfo.DateStarted = DateTime.UtcNow;
 ```
 
-The reference therefore maintains a well-formed interval
-`[dataset start, last publish]`. This repository maintains
-`[dataset start, host enrolment time]`, which is stale and, after any rollover,
-inverted.
+The reference advances the interval's end at publication. Before the fix,
+this repository kept the end date from record creation or import; after a
+later reset, the interval could become inverted.
 
 ### How it reaches the API
 
@@ -115,13 +106,16 @@ if (sentData.DateStart != null && sentData.DateEnd != null)
 }
 ```
 
-With a `DateEnded` that predates the requested window, `m.DateEnded >= DateStart`
-is false for every dataset, so the query returns nothing.
+When `DateEnded` predates the requested window, `m.DateEnded >= DateStart`
+is false for that dataset, so the query excludes it even if it has samples
+inside the window.
 
 ### Why the chart disagrees with the API
 
-The chart readers deliberately do not select datasets by `DateEnded`. They select
-by per-sample timestamps instead:
+The Data chart reader exempts live dataset 0 from its `DateEnded` candidate
+filter. The Service chart reader selects all unarchived datasets as candidates.
+Both then filter readings by per-sample timestamps. For example, the Data reader
+uses:
 
 `~/code/NetworkMonitorData/Data/ChartRangeReader.cs:34-44`
 
@@ -134,9 +128,10 @@ var readings = context.PingInfos.AsNoTracking()
 ```
 
 Each `PingInfo` carries its own `DateSentInt` (an absolute per-sample timestamp,
-written by this agent at `firmware/main/monitor_model.c:559`), so the chart
-resolves the window correctly while the API cannot. Same host, same window, two
-different answers.
+written by this agent in `nm_model_probe`). Thus the live dataset's chart can
+show readings that the host data API excludes for the same window. The Data
+reader can still exclude older datasets with stale dates; the Service reader
+does not use dataset dates to select unarchived candidate IDs.
 
 `ChartRangeReader.cs:35` also carries a comment naming this exact hazard —
 `// Dataset 0 is still collecting; DateEnded can retain the previous dataset's
@@ -153,21 +148,20 @@ allowance.
   degenerates to `m.DateStarted <= DateEnd || m.DateEnded <= DateEnd`, which the
   stale value satisfies. The rows returned are unrelated to the window.
 
-### Recommended fix
+### Firmware fix implemented
 
-Refresh `DateEnded` so the live dataset's end tracks its most recent sample.
-Two options, in order of preference:
+Refresh `DateEnded` in the live model before publication so the published
+value and the subsequent cycle snapshot agree. This repository now uses the
+publication-time rule, matching the .NET processor:
 
-**Option A — stamp at publish, in the sample path.** Set `DateEnded` to the
-timestamp of the most recently published sample for that host, at the same point
-the per-sample `DateSent`/`DateSentInt` are written
-(`firmware/main/monitor_model.c:559`, in `nm_model_probe`). This makes the
-dataset interval mean "contains exactly these samples", which is the strongest
-guarantee for the API filter and is tighter than the reference implementation's
-wall-clock stamp.
+`nm_model_publication_date` sets `DateEnded` to the current UTC time for each
+record in a disposable copy-on-write candidate. `state.c` commits that
+candidate before taking the publication snapshot and attempts one cycle save
+after publication. The refresh also runs on empty and paused cycles.
 
-**Option B — exact parity.** Set `DateEnded = now` on every publish, as
-`PublishRepo.cs:98` does. Simplest and provably matches the reference.
+An alternative would advance `DateEnded` when `nm_model_probe` accepts a sample.
+That would be a deliberate difference from .NET publication timing and would
+need a separate rule for empty and paused cycles.
 
 Either way:
 
@@ -176,24 +170,20 @@ Either way:
   (`firmware/main/monitor_record.c:246`). Use `nm_records_edit` to obtain an
   exclusively-owned record. The established idiom is `edit_info` /
   `nm_records_edit` at `firmware/main/monitor_model.c:42-45` and `:210`.
-- The same change must be applied to `tests/reference/monitor_core.c`, which is
-  the parity oracle. `tests/native/test_monitor_core.c` is compiled twice — once
-  against the reference and once against the production `monitor_model.c` via
-  `tests/native/test_typed_core.c` and `tests/native/typed_core_adapter.h` — so
-  both implementations must agree or the shared assertions diverge. The reference
-  currently has the same frozen-`DateEnded` behaviour at
-  `tests/reference/monitor_core.c:234` (fill) and `:333` (reset).
-- Add a native assertion that a published dataset's `DateEnded` advances with
-  its samples, and that `DateEnded` is never earlier than `DateStarted`.
+- The change is in publication orchestration, so the host-only
+  `tests/reference/monitor_core.c` regression implementation does not need a
+  fake publication step. The production state adapter checks a stale imported
+  date, the published value, the cycle save, an empty cycle and a reset.
 - Update `docs/monitoring-parity.md`, whose contract table covers
   "Configuration and dataset reset" (`MonitorPingCollection.FillPingInfo`,
   `Zero`; `MonitorPingProcessor.Init`). The `DateEnded` refresh rule belongs
   there next to the reset contract, since the two together define the dataset
   interval.
 
-Note that `nm_esp_state_save` persists `s->core` after publication
-(`firmware/main/state.c:690`), so a refreshed `DateEnded` will also be durable
-across restarts without a separate save.
+`nm_esp_state_save` persists `s->core` after publication (`state.c`), so a
+refresh applied only to a temporary publication snapshot would not be durable.
+The live model must be updated through the existing candidate/COW ownership
+rules before that snapshot is taken.
 
 ---
 
@@ -208,7 +198,7 @@ public DateTime? DateEnd
 {
     get
     {
-        if (DateStart != null && (_dateEnd == null || _dateEnd < DateTime.SpecifyKind(DateStart.Value, DateTimeKind.Utc).AddHours(6)))
+        if (DateStart != null && (_dateEnd == null || _dateEnd < DateStart.Value.AddHours(6)))
         {
             return DateStart.Value.AddHours(6);
         }
@@ -239,9 +229,9 @@ Two consumers read this property, and both see the rewritten value:
    reports the rewritten bound back to the caller, so the caller is told it
    requested `20:00`.
 
-The second effect is the more damaging of the two: the API misreports the
-request it executed, so a caller comparing its own request against the echo
-cannot detect the widening.
+The echo misreports the submitted bound; it displays the bound the filter
+actually used. A caller comparing the echo with its original request can
+detect the widening.
 
 ### Verification
 
@@ -293,9 +283,10 @@ Concretely:
 2. At the filter site
    (`~/code/NetworkMonitorService/Services/MonitorService.cs:812-826`), decide
    explicitly whether to widen. If the six-hour rule is still wanted, apply it
-   to the query and record it in `appliedFilters` as a distinct, labelled fact
-   (for example `date_end=2026-10-21T15:00:00 (widened to dataset granularity
-   2026-10-21T20:00:00)`) rather than silently substituting the value.
+   to candidate selection only and record both the requested and effective
+   selection bounds explicitly. First verify that widening is needed for an
+   interval-overlap predicate; a valid enclosing dataset already overlaps a
+   narrow requested window.
 3. Apply the same treatment to the `date_start`-only path, where the getter
    currently invents an end bound.
 
@@ -329,29 +320,34 @@ else if (sentData.DateEnd != null)
 }
 ```
 
-- The `date_start`-only branch is unreachable. Because the getter returns a
-  non-null value whenever `DateStart` is set, the first branch always matches
-  and the `else if` never runs. Its `||` should be `&&` regardless.
-- The `date_end`-only branch has the same `||`/`&&` inversion. `m.DateEnded <=
-  sentData.DateEnd` is true for every dataset that ended at any point in the
-  past, so this branch returns essentially the whole table rather than the
-  datasets overlapping the requested bound.
-- The same two branches exist with the same inversion in the parallel
-  implementation at `~/code/MonitorService.cs:699-726` (a root-level file that
-  is not part of any project in the tree — see "Repository note" below).
+- The `date_start`-only branch is unreachable with the current getter: a
+  non-null start makes `DateEnd` non-null. Once the getter is fixed, its
+  interval-overlap condition should be `m.DateEnded >= DateStart` for
+  well-formed datasets. Its existing `||` also admits an inverted interval
+  whose start is later than the bound but whose end is earlier.
+- The `date_end`-only branch should use `m.DateStarted <= DateEnd` for
+  well-formed datasets. Its current `|| m.DateEnded <= DateEnd` can admit an
+  inverted dataset that starts after the bound. It does not make every
+  past dataset a false match: a well-formed past dataset already satisfies
+  `DateStarted <= DateEnd` and legitimately overlaps the open-ended window.
+- Replacing either `||` with `&&` is incorrect. It would exclude well-formed
+  datasets that span the bound. Apply the same analysis if the root-level
+  `~/code/MonitorService.cs` copy is ever reused.
 
 ---
 
 ## Structural observation: dataset dates are not the right filter key
 
-Both defects share a root cause in the data model: the API filters host data on
+Both defects interact with a limitation in the data model: the API filters host data on
 *dataset envelope* dates (`MonitorPingInfo.DateStarted`/`DateEnded`), while the
 readings themselves carry per-sample absolute timestamps
 (`PingInfo.DateSentInt`).
 
-The chart path already resolves the window from per-sample timestamps and uses
-dataset dates only to pick candidate datasets. The API path does the opposite,
-which is why the two can disagree for the same host and window.
+Both chart paths filter readings by per-sample timestamps. The Data chart path
+also uses dataset dates to choose candidates, with an exemption for live dataset
+0; the Service chart path chooses all unarchived datasets. The host data API
+selects dataset-level records by their envelope dates. These paths can therefore
+disagree for the same host and window.
 
 The API cannot return a true one-hour aggregate from `get_host_data` regardless
 of these fixes, because that endpoint returns dataset-level accumulators
@@ -361,14 +357,13 @@ totals — the "12 hours" span in the observed output is the dataset envelope, n
 the requested window. Per-sample readings are available from
 `GetHostResponseObjByDateRange*` and `GetChartRange*`.
 
-Even with both fixes applied, an agent that stops publishing leaves a stale
-`DateEnded` that will silently hide its data from range queries. The chart
-readers already tolerate this for the live dataset
-(`NetworkMonitorData/Data/ChartRangeReader.cs:35`). The two chart readers have
-since diverged — `NetworkMonitorService/Services/ServiceChartRangeReader.cs:35`
-no longer carries that tolerance, and the API range filter carries neither.
-Reconciling them, and considering a per-sample filter for the API path, would
-make the API robust to any agent that stops or delays publishing.
+An agent that stops publishing leaves `DateEnded` at its last legitimate
+publication time. That alone does not hide samples that were published before
+the stop: those samples should fall inside the recorded interval. Stale or
+inverted dates can still hide valid readings if the envelope is wrong. The Data
+chart reader tolerates this for live dataset 0; the Service chart reader selects
+all unarchived candidate datasets. Considering per-sample selection for an API
+that promises exact sample windows is a separate API design change.
 
 ---
 
@@ -377,7 +372,7 @@ make the API robust to any agent that stops or delays publishing.
 `~/code/MonitorService.cs` is a root-level file in the code workspace that is
 not referenced by any `.csproj` in the tree, and differs from
 `~/code/NetworkMonitorService/Services/MonitorService.cs`. It contains a copy of
-the same filter logic with the same `||`/`&&` inversion. It appears to be a
+the same one-bound filter logic. It appears to be a
 leftover from the pre-split layout. It is not compiled, so it is not a live
 defect, but it will mislead anyone reading it as the source of truth. It should
 be confirmed as disposable and removed.
@@ -390,9 +385,9 @@ Fixing Defect 1:
 
 | Path | Change |
 |---|---|
-| `firmware/main/monitor_model.c` | Refresh `DateEnded` alongside per-sample writes, copy-on-write via `nm_records_edit` |
-| `tests/reference/monitor_core.c` | Same behaviour in the parity oracle, so the shared assertions hold for both implementations |
-| `tests/native/test_monitor_core.c` | Assert `DateEnded` advances with samples and never precedes `DateStarted` |
+| `firmware/main/monitor_model.c` and/or `firmware/main/state.c` | Refresh `DateEnded` in the live model under copy-on-write rules before publication, according to the chosen contract |
+| `tests/reference/monitor_core.c` | Update only if the refresh is implemented in the shared probe contract |
+| `tests/native/test_monitor_core.c`, state adapter tests | Assert the chosen refresh rule, publication value, reset handling and durable cycle state |
 | `docs/monitoring-parity.md` | Document the `DateEnded` refresh rule beside the dataset-reset contract |
 
 Fixing Defect 2:
@@ -400,22 +395,24 @@ Fixing Defect 2:
 | Path | Change |
 |---|---|
 | `~/code/NetworkMonitorLib/Objects/MonitorPingInfoQuery.cs` | Make `DateEnd` a plain accessor; move widening to the query site |
-| `~/code/NetworkMonitorService/Services/MonitorService.cs` | Apply the filter on the requested bound; report widening explicitly; correct the `\|\|`/`&&` inversions |
+| `~/code/NetworkMonitorService/Services/MonitorService.cs` | Filter using the requested bound; if widening is justified, report it separately; simplify one-bound overlap predicates without replacing `\|\|` with `&&` |
 | `~/code/NetworkMonitorService/Services/Function/MonitorFunctionHandler.cs` | Confirm the client-local-to-UTC conversion still applies to both bounds once the getter is inert |
 
-Validation for Defect 1 uses the repository's host test suite, which needs the
-pinned submodules:
+Validation for a C fix to Defect 1 uses the repository's required sanitizer-enabled
+host test suite and firmware build, with pinned submodules:
 
 ```sh
 git submodule update --init --recursive
-cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer'
 cmake --build build-tests
 ctest --test-dir build-tests --output-on-failure
-python3 -m unittest discover -s tests/tooling
+bash tests/dotnet/generate.sh --check
+./tools/build-firmware.sh
 ```
 
-The `tests/dotnet/generate.sh --check` oracle is unaffected by these changes: it
-verifies the shared .NET model sources, which are not modified here.
+The source-linked .NET oracle should still be checked when changing model or
+serialization behavior; it does not test the .NET publisher's runtime path.
 
 Defect 2 is in a separate repository (`NetworkMonitorLib`) and is validated by
 the service's own test suite in `~/code/NetworkMonitorService`.
@@ -424,8 +421,13 @@ the service's own test suite in `~/code/NetworkMonitorService`.
 
 ## Status
 
-No code was changed. The findings above were established by reading the
-implementation, by an exhaustive search for `DateEnded` assignments, by
-temporarily running a test against `MonitorPingInfoQuery.DateEnd` to confirm the
-getter's behaviour, and by comparing this agent against the C#/.NET reference
-implementation. The temporary test was removed after use.
+The firmware fix is implemented in this repository. All 35 native CTest targets
+pass with address and undefined-behavior sanitizers when leak detection is
+disabled; LeakSanitizer cannot run under the current ptrace environment. The
+existing private OTA signing key is present, but the signed firmware build
+cannot start because ESP-IDF Installation Manager (EIM) is not configured on
+this machine.
+`tests/dotnet/generate.sh --check` stops on existing `manifest.json` source
+revision drift. Defect 2 remains in the sibling shared library and service.
+The original getter finding was confirmed with a temporary xunit test, which
+was removed. No device, emulator, or backend deployment has been performed.

@@ -215,6 +215,17 @@ bool nm_model_reconcile(nm_model *m, const char *app, const char *when)
     }
     return true;
 }
+bool nm_model_publication_date(nm_model *m, const char *when)
+{
+    TRY(m && when);
+    for (size_t i = 0; i < m->infos.count; ++i) {
+        nm_monitor_record *info = (nm_monitor_record *)nm_records_edit(&m->infos, i);
+        TRY(info);
+        TRY(MSTR(info, DateEnded, when));
+    }
+    m->changed = true;
+    return true;
+}
 bool nm_model_updates(nm_model *m, yyjson_mut_val *updates, const char *app, const char *when)
 {
     TRY(yyjson_mut_is_arr(updates));
