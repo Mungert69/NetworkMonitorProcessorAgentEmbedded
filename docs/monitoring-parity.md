@@ -61,8 +61,8 @@ windows are not clamped to the ordinary endpoint deadline.
 Each cycle reads the immutable snapshot prepared at the previous cycle's end.
 The initial snapshot is empty. Targeted connects filter by address/protocol and
 snapshot timestamp, decode every matching advertisement in the window, average
-the selected metric in physical units, then encode the average once. Latest
-successfully decoded text remains the diagnostic. The scanner never decrypts
+the selected metric in physical units, then encode the average once. Successful
+sensor diagnostics name only the selected metric and its encoded sample. The scanner never decrypts
 or modifies model state. Controller duplicate filtering stays off. ESP32's
 buffer suppresses byte-identical same-address receptions less than 1000 ms after
 the last retained reception; changed payloads always pass. This optimisation is
@@ -99,7 +99,7 @@ Explicit BLE metrics use fixed `BLE v2:<format>:<metric>` status labels across
 Victron, Ruuvi and BTHome. The typed selected reading is encoded in
 `PingInfo.RoundTripTime` using the shared versioned catalogue's scale/offset;
 65535 remains reserved for failure. Unit/scale/offset are resolved by Data/API
-from the configured protocol/metric. Readable measurements remain in diagnostics.
+from the configured protocol/metric. The selected physical value and its encoding remain in diagnostics.
 Without explicit `--metric`, implicit solar/receipt behavior remains. Historical
 encoding conversion is deliberately omitted. Never append changing measurements
 to `PingInfo.Status`: the backend interns distinct statuses using 16-bit IDs.

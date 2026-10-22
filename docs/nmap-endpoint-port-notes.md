@@ -31,7 +31,7 @@ The .NET `nmap` endpoint queues the `Nmap` command processor with arguments
 It sets `IsLongRunning` and extends the monitor timeout by 10x. It treats output
 containing `Host is up` as success with status `Port/s open`; output containing
 `Host seems down` or `0 hosts up` becomes failure with status `Port/s closed`.
-The raw filtered scan output is stored as the result message. `nmapvuln` uses
+The result message labels the scan conclusion and details before the filtered output. `nmapvuln` uses
 the same wrapper with `--script vuln` and is explicitly out of scope here.
 
 ## ESP32 architecture inspected

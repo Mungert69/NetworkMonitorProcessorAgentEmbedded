@@ -13,16 +13,16 @@ The generated fixture's `SourceHashes` identifies the .NET working-tree sources.
 | Type | .NET reference | C implementation | Measurement / timeout extension | Outcome contract and differences |
 |---|---|---|---|---|
 | `icmp` | `ICMPConnect` | `endpoint_icmp.c` | Reply RTT in ms, scale 1; no extension | `Success` on reply; failed network replies use `Exception`. C tries supported resolved addresses within one total deadline, including DNS; SDK ping error details differ. |
-| `dns` | `DNSConnect` | `endpoint_dns.c` | Lookup duration in ms, scale 1; no extension | `Found IP Addresses`; empty/error/timeout use `Exception`. Address ordering and bounded diagnostic length can differ. |
+| `dns` | `DNSConnect` | `endpoint_dns.c` | Lookup duration in ms, scale 1; no extension | `Found IP Addresses`; successful diagnostics label addresses resolved during this check. Empty/error/timeout use `Exception`. Address ordering and bounded diagnostic length can differ. |
 | `rawconnect` | `SocketConnect` | `endpoint_tcp.c` | TCP duration excluding DNS, ms, scale 1; no extension | Default port 443; `Connected`, `Connection timed out.`, `Unable to resolve domain.`, `Exception`. C tries multiple address families and includes DNS in the total budget; .NET uses the first address and an IPv4 socket, with a separate TCP timeout. |
 | `http` | `HTTPConnect`, `ConnectFactory`, `AddressFilter` | `endpoint_http.c`, `http_deadline.*` | GET including body, ms, scale 1; no extension | Completed HTTP responses, including 4xx/5xx, are reachable. Enum-name statuses match .NET 10; timeout/request errors retain their categories. URL, TLS, redirects and headers have the differences below. |
 | `httphtml` | Same, HTML mode | Same, with content-length diagnostic | HTML GET including body, ms, scale 1; no extension | Same status handling as HTTP; actual content length/text may differ with headers/content negotiation. |
 | `https` | Same, certificate-check client | Same, verified TLS | GET including body, ms, scale 1; no extension | Fixed timing/status contract matches. Seven-day expiry policy matches; schemeless routing remains a gap below. |
 | `quantum` | `QuantumConnect` | `endpoint_quantum.c`, `tls_inspection.*`, `quantum_tls.*` | Operation duration, ms, scale 1; no extension | `Using quantum safe handshake`, `Could not negotiate quantum safe handshake`, `Timeout`, `Exception`. C requires authenticated TLS 1.3 completion and supports its documented six groups; .NET can accept ServerHello alone and broader configured OQS algorithms. |
 | `quantumcert` | `QuantumCertConnect`, `QuantumCertificateProbe` | Same, isolated certificate-observation mode | Operation duration, ms, scale 1; no extension | `Quantum-safe certificate detected`, `Certificate not quantum-safe`, `Timeout`, `Exception`. C classifies ML-DSA signature or public key independently of certificate trust; algorithm coverage and certificate display labels differ. |
-| `nmap` | `NmapCmdConnect("-sV")` | `endpoint_nmap.c`, `nmap_runner_embedded.c` | Duration in ms, scale 10; timeout ×10 | `Port/s open`, `Port/s closed`, `Host status unknown`; runner failures use `Exception`. C scans the configured port or 22 common ports with bounded service hints, not full Nmap service/version/discovery parity. TCP refusal still proves host reachability. |
-| `blebroadcastlisten` | `BleBroadcastListenConnect`, listen command processor | `endpoint_ble.c`, shared scanner/decoders | Capture duration in ms, scale 10; timeout ×10 | `BLE listen complete`, including zero captures. Raw and selected/decrypted captures plus decode errors are diagnostics. Output is bounded and formatted differently. |
-| `blebroadcast` | `BleBroadcastConnect`, targeted command processor and decoder registry | `endpoint_ble.c`, shared scanner/decoders | Explicit readings use the same v2 unit/scale/offset catalogue; timeout ×10 | `BLE v2:<format>:<metric>`; unavailable/missing/out-of-range selections fail with `BLE Metric Error`. No metric preserves legacy implicit solar PV / raw receipt behavior. Sensor samples are separate from elapsed time. |
+| `nmap` | `NmapCmdConnect("-sV")` | `endpoint_nmap.c`, `nmap_runner_embedded.c` | Duration in ms, scale 10; timeout ×10 | `Port/s open`, `Port/s closed`, `Host status unknown`; completed-scan diagnostics label the conclusion and scan details. Runner failures use `Exception`. C scans the configured port or 22 common ports with bounded service hints, not full Nmap service/version/discovery parity. TCP refusal still proves host reachability. |
+| `blebroadcastlisten` | `BleBroadcastListenConnect`, listen command processor | `endpoint_ble.c`, shared scanner/decoders | Capture duration in ms, scale 10; listen ignores timeout | `BLE listen complete`, including zero captures. Diagnostics label advertisements captured during this scan. Output is bounded and formatted differently. |
+| `blebroadcast` | `BleBroadcastConnect`, targeted command processor and decoder registry | `endpoint_ble.c`, shared scanner/decoders | Explicit readings use the same v2 unit/scale/offset catalogue; address capture window is configured timeout ×10 | `BLE v2:<format>:<metric>`; unavailable/missing/out-of-range selections fail with `BLE Metric Error`. No metric preserves legacy implicit solar PV / raw receipt behavior. Sensor samples are separate from elapsed time. |
 
 ICMP, DNS, TCP and the three HTTP modes retain their .NET timing thresholds in
 the shared backend catalogue. Quantum operations, Nmap, BLE discovery and BLE
@@ -38,11 +38,10 @@ ESP32 does not support .NET dynamic compiled connects/catalogue publication.
   `floor(elapsed_ms / 10)`. Ordinary durations retain direct ushort conversion,
   without clamping. A successful Nmap/listen operation taking 70009 ms records
   7000 and reconstructs to 70000 ms (less than 10 ms quantization loss).
-- Applied BLE targeted/listen ×10 timeout extension in endpoint dispatch.
-  Nmap already extended inside its legacy runner, but imposed a 120-second cap.
-  The extension now belongs to endpoint dispatch, and the runner receives the
-  exact budget: no hidden second multiplication or runner ceiling. Standalone
-  command requests still use their independently supplied exact budgets.
+- Targeted BLE applies its ×10 capture window inside BLE endpoint policy; BLE
+  listen ignores timeout. Nmap's ×10 deadline belongs to endpoint dispatch,
+  and the runner receives the exact budget. Standalone command requests still
+  use their independently supplied exact budgets.
 - Added `sample` / `has_sample` to the internal `nm_esp_result`, preserving
   actual elapsed time separately. Both state execution paths use
   `nm_esp_result_sample`. Decoder samples bypass duration conversion; failed
@@ -59,7 +58,7 @@ ESP32 does not support .NET dynamic compiled connects/catalogue publication.
   raw data and do not turn discovery into a failed probe.
 
 The effective default base timeout is 59000 ms, inherited by the model from
-PingParams. Extended operations receive 590000 ms. Nmap/listen scale 10 covers
+PingParams. Nmap's extended operation receives 590000 ms. Nmap/listen scale 10 covers
 655340 ms before the failure marker. Custom timeout settings must fit their
 encoding; neither processor introduces automatic sample saturation. Targeted
 raw BLE receipt fallback remains an unclassified legacy ushort duration with

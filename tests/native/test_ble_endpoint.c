@@ -111,7 +111,9 @@ static void test_victron(void)
                                  .Timeout = 100};
     nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && !strcmp(result.status, "BLE v2:victron:pv_power"));
-    assert(result.has_sample && result.sample == 123 && strstr(result.message, "PV power: 123 W"));
+    assert(result.has_sample && result.sample == 123 &&
+           strstr(result.message, "Last observed value for this data set: pv_power=123 W"));
+    assert(!result.detail_message && !strstr(result.message, "Battery voltage:"));
     reset_packets();
     nm_esp_result_release(&result);
     result = run_ble(&monitor, 20);
@@ -152,6 +154,7 @@ static void test_listen(void)
     assert(result.ok && !strcmp(result.status, "BLE listen complete"));
     assert(strstr(result.message, "captured 2 advertisement(s)"));
     assert(result.detail_message);
+    assert(strstr(result.detail_message, "Advertisements captured during this scan:"));
     assert(strstr(result.detail_message, "Capture"));
     assert(strstr(result.detail_message, "Address: AA:BB:CC:DD:EE:FF"));
     assert(strstr(result.detail_message, "Payload (raw): 13FFE10201"));
@@ -299,9 +302,6 @@ static void test_changing_metric_readings(void)
                  {"load_current", "BLE load_current", {30, 31}},
                  {"load_current_a", "BLE load_current", {30, 31}},
                  {"load_a", "BLE load_current", {30, 31}}};
-    const char *details[] = {
-        "Battery voltage: 13.67 V; Battery current: 2.5 A; Yield today: 3.00 kWh; PV power: 123 W",
-        "Battery voltage: 13.68 V; Battery current: 2.6 A; Yield today: 3.01 kWh; PV power: 456 W"};
     for (size_t i = 0; i < sizeof(cases) / sizeof(*cases); ++i) {
         char arguments[96];
         int written =
@@ -328,7 +328,9 @@ static void test_changing_metric_readings(void)
             uint16_t encoded;
             assert(nm_ble_metric_encode(encoding, cases[i].values[sample] / divisor, &encoded));
             assert(result.has_sample && result.sample == encoded);
-            assert(strstr(result.message, details[sample]));
+            assert(strstr(result.message, "Last observed value for this data set:"));
+            assert(strstr(result.message, nm_ble_metric_canonical(cases[i].metric)));
+            assert(!result.detail_message && !strstr(result.message, "Battery voltage:"));
             nm_esp_result_release(&result);
         }
     }
@@ -561,9 +563,9 @@ static void test_sensor_endpoints(void)
                                  .EndPointType = "blebroadcast",
                                  .Args = "--format bthome --metric temperature"};
     nm_esp_result result = run_ble(&monitor, 100);
-    assert(result.ok && result.detail_message &&
-           strstr(result.detail_message, "Temperature: 25 °C") &&
-           strstr(result.detail_message, "Humidity: 49.83 %"));
+    assert(result.ok && !result.detail_message &&
+           strstr(result.message, "Last observed value for this data set: temperature=25 °C") &&
+           !strstr(result.message, "Humidity:"));
     nm_esp_result_release(&result);
     reset_packets();
     a = &packets[packet_count++];
@@ -572,7 +574,8 @@ static void test_sensor_endpoints(void)
     monitor.Address = a->address;
     monitor.Args = "--format ruuvi --metric temperature";
     result = run_ble(&monitor, 100);
-    assert(result.ok && strstr(result.detail_message, "RuuviTag"));
+    assert(result.ok && !result.detail_message &&
+           strstr(result.message, "Last observed value for this data set: temperature="));
     nm_esp_result_release(&result);
     reset_packets();
     add_victron((uint8_t[16]){0}, 1);
@@ -731,8 +734,8 @@ static void test_window_averaging(void)
     uint16_t expected;
     assert(nm_ble_metric_encode(nm_ble_metric_find("victron", "battery_current"), -1.0, &expected));
     assert(result.ok && result.sample == expected);
-    assert(
-        strstr(result.detail_message, "Battery current: -0.9 A")); /* latest, not averaged text */
+    assert(!result.detail_message &&
+           strstr(result.message, "Last observed value for this data set: battery_current=-1 A"));
     nm_esp_result_release(&result);
     monitor.Args = "--format victron --metric battery_voltage";
     result = nm_endpoint_check_ble(&monitor, 70000);

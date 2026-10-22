@@ -1,6 +1,8 @@
 #include "endpoint_internal.h"
 #include "nmap_runner.h"
+#include "nm_memory.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
@@ -159,8 +161,16 @@ nm_esp_result nm_endpoint_check_nmap(const char *address, unsigned configured_po
     else
         snprintf(result.message, sizeof(result.message), "%s",
                  "NMAP: Failed to connect: Host seems down");
-    result.detail_message = run.standard_output;
-    run.standard_output = NULL;
+    size_t output_length = strlen(output);
+    size_t capacity = output_length + 2 * strlen(result.status) +
+                      sizeof(" Scan conclusion: \nScan details:\n");
+    result.detail_message = nm_bulk_calloc(capacity, 1);
+    if (!result.detail_message) {
+        nm_nmap_runner_result_release(&run);
+        return nm_endpoint_local_failure(result.elapsed_ms, "Nmap diagnostic allocation failed");
+    }
+    snprintf(result.detail_message, capacity, "%s Scan conclusion: %s\nScan details:\n%s",
+             result.status, result.status, output);
     nm_nmap_runner_result_release(&run);
     return result;
 }

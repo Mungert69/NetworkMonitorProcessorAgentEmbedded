@@ -594,7 +594,8 @@ static void results(void)
 {
     nm_esp_result result = nm_endpoint_check_dns("host.test", 100);
     assert(result.ok && result.elapsed_ms == 5);
-    assert(strcmp(result.message, "Found IP Addresses  : 192.0.2.1") == 0);
+    assert(strcmp(result.message,
+                  "Found IP Addresses Addresses resolved during this check: 192.0.2.1") == 0);
     clean();
     dns_empty = true;
     result = nm_endpoint_check_dns("host.test", 100);
@@ -749,6 +750,7 @@ static void nmap_endpoint(void)
     nm_esp_result result = nm_esp_endpoint_run(&monitor);
     assert(result.ok && !strcmp(result.status, "Port/s open"));
     assert(result.detail_message && strstr(result.detail_message, "443/tcp open"));
+    assert(strstr(result.detail_message, "Scan conclusion: Port/s open\nScan details:"));
     assert(strstr(result.detail_message, "Host is up"));
     assert(nmap_connects == 1);
     nm_esp_result_release(&result);

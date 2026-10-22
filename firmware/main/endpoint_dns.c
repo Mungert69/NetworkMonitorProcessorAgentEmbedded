@@ -141,8 +141,8 @@ nm_esp_result nm_endpoint_check_dns(const char *host, unsigned timeout)
         return nm_endpoint_lookup_failure("dns", lookup, nm_endpoint_elapsed(start));
     nm_esp_result result =
         nm_endpoint_result("dns", NM_ENDPOINT_SUCCESS, 0, nm_endpoint_elapsed(start), NULL);
-    /* ProcessStatus adds a space before extraData, which itself starts " : ". */
-    size_t used = (size_t)snprintf(result.message, sizeof(result.message), "%s  : ", result.status);
+    size_t used = (size_t)snprintf(result.message, sizeof(result.message),
+                                  "%s Addresses resolved during this check: ", result.status);
     bool first = true;
     for (const struct addrinfo *item = addresses; item; item = item->ai_next) {
         char numeric[48];

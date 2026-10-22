@@ -597,6 +597,8 @@ static nm_esp_result listen_snapshot(const nm_monitor_record *monitor,
     result.detail_message = nm_bulk_calloc(capacity, 1);
     if (!result.detail_message)
         return nm_endpoint_local_failure(0, "BLE listen output allocation failed");
+    append_text(result.detail_message, capacity, &used,
+                "BLE listen complete Advertisements captured during this scan:\n");
     for (size_t i = 0; i < count; ++i) {
         nm_ble_advertisement item = {0};
         uint64_t sequence = 0;
@@ -970,23 +972,8 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
                          "No decodable BLE advertisements in the measurement window");
             return invalid;
         }
-        result.detail_message = latest;
-        snprintf(result.message, sizeof(result.message), "%.255s", latest);
-        if (decoder->requires_key) {
-            size_t used = 0;
-            result.message[0] = 0;
-            const char *line = latest;
-            while (*line) {
-                const char *end = strchr(line, '\n');
-                size_t length = end ? (size_t)(end - line) : strlen(line);
-                append_text(result.message, sizeof(result.message), &used, "%s%.*s",
-                            used ? "; " : "", (int)length, line);
-                if (!end)
-                    break;
-                line = end + 1;
-            }
-        }
         if (!samples) {
+            result.detail_message = latest;
             snprintf(result.status, sizeof(result.status), "BLE Metric Error");
             snprintf(result.message, sizeof(result.message),
                      "BLE metric %s has no usable readings in the window", metric);
@@ -1019,6 +1006,17 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
         }
         result.ok = result.has_sample = true;
         result.sample = sample;
+        char value[48];
+        snprintf(value, sizeof(value), "%.6f", mean);
+        char *end = value + strlen(value) - 1;
+        while (end > value && *end == '0') *end-- = '\0';
+        if (*end == '.') *end = '\0';
+        snprintf(result.message, sizeof(result.message),
+                 "%s Last observed value for this data set: %s=%s %s; sample=%u; scale=%g; offset=%g",
+                 result.status, nm_ble_metric_canonical(metric), value,
+                 result.measurement_unit ? result.measurement_unit : "", sample,
+                 result.measurement_scale, result.measurement_offset);
+        free(latest);
         return result;
     }
     if (!captured) {

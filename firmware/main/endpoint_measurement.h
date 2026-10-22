@@ -24,8 +24,7 @@ static inline unsigned nm_endpoint_duration_scale(const char *type)
 }
 static inline unsigned nm_endpoint_timeout_multiplier(const char *type)
 {
-    return type && (!strcmp(type, "nmap") || !strcmp(type, "blebroadcastlisten") ||
-                    !strcmp(type, "blebroadcast"))
+    return type && !strcmp(type, "nmap")
                ? NM_EXTENDED_DURATION_SCALE
                : 1;
 }
