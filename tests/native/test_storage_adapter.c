@@ -1,5 +1,6 @@
 /* Tests the real storage adapter, mocking only the NVS boundary. */
 #include "nm_esp.h"
+#include "storage_checkpoint.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "brotli/decode.h"
@@ -450,8 +451,31 @@ static void test_init_and_reset(void)
     CHECK(!durable[MONITORING].bytes && !durable[MONITORS].bytes && !durable[PROCESSOR].bytes);
     expect_blob(OTA, "{\"rollback\":true}");
 }
+static void test_clock_checkpoint(void)
+{
+    reset();
+    CHECK(nm_esp_storage_clock_load() == 0);
+    yyjson_mut_doc *d = parse("{}");
+    CHECK(nm_storage_checkpoint_save(d));
+    int64_t saved = nm_esp_storage_clock_load();
+    CHECK(saved >= INT64_C(1640995200));
+    fail_commit_at = commits + 1;
+    CHECK(!nm_storage_checkpoint_save(d));
+    CHECK(nm_esp_storage_clock_load() == saved);
+    yyjson_mut_doc_free(d);
+    reset();
+    seed(MONITORING, "{\"ClockUtc\":1640995300,\"ClockState\":{\"Valid\":true,\"High\":200}}");
+    CHECK(nm_esp_storage_clock_load() == INT64_C(1640995400));
+    seed(MONITORING, "{\"ClockUtc\":-1}");
+    CHECK(nm_esp_storage_clock_load() == 0);
+    seed(MONITORING, "{\"ClockUtc\":9223372036854775807}");
+    CHECK(nm_esp_storage_clock_load() == 0);
+    seed(MONITORING, "{\"ClockUtc\":\"invalid\"}");
+    CHECK(nm_esp_storage_clock_load() == 0);
+}
 int main(void)
 {
+    test_clock_checkpoint();
     test_primary_failures();
     test_retire_after_commit();
     test_cleanup_failures();
@@ -462,6 +486,6 @@ int main(void)
     test_large_compressed_snapshot();
     test_init_and_reset();
     reset();
-    puts("9 real storage adapter tests passed");
+    puts("10 real storage adapter tests passed");
     return 0;
 }

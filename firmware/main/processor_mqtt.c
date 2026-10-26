@@ -1,16 +1,26 @@
 #include "esp_log.h"
+#include "status_led.h"
 #include "processor_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static const char *TAG = "nm_processor";
-static const char *operations[] = {
-    "processorInit",           "processorConnect",          "processorQueueDic",
-    "processorWakeUp",         "removePingInfos",           "processorAlertFlag",
-    "processorAlertSent",      "processorResetAlerts",      "processorUserEvent",
-    "processorFirmwareUpdate", "processorFirmwareHealthAck", "processorCommand",
-    "cancelCommand", "getCmdProcessorHelp", "getCmdProcessorList"};
+static const char *operations[] = {"processorInit",
+                                   "processorConnect",
+                                   "processorQueueDic",
+                                   "processorWakeUp",
+                                   "removePingInfos",
+                                   "processorAlertFlag",
+                                   "processorAlertSent",
+                                   "processorResetAlerts",
+                                   "processorUserEvent",
+                                   "processorFirmwareUpdate",
+                                   "processorFirmwareHealthAck",
+                                   "processorCommand",
+                                   "cancelCommand",
+                                   "getCmdProcessorHelp",
+                                   "getCmdProcessorList"};
 
 void nm_processor_mqtt_event(void *arg, esp_event_base_t base, int32_t id, void *event_data)
 {
@@ -19,6 +29,7 @@ void nm_processor_mqtt_event(void *arg, esp_event_base_t base, int32_t id, void 
     esp_mqtt_event_handle_t event = event_data;
     switch ((esp_mqtt_event_id_t)id) {
     case MQTT_EVENT_CONNECTED:
+        nm_status_led_mqtt(true);
         agent->connected = true;
         agent->firmware_status_sent = false;
         agent->subscriptions = 0;
@@ -41,6 +52,7 @@ void nm_processor_mqtt_event(void *arg, esp_event_base_t base, int32_t id, void 
         }
         break;
     case MQTT_EVENT_DISCONNECTED:
+        nm_status_led_mqtt(false);
         agent->connected = false;
         agent->subscriptions = 0;
         ESP_LOGW(TAG, "MQTT disconnected");

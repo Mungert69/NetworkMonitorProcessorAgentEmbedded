@@ -94,8 +94,13 @@ bool nm_esp_storage_reset_monitoring(void);
 bool nm_esp_config_bind(nm_esp_config *config, yyjson_mut_val *root);
 bool nm_esp_config_save(const nm_esp_config *config);
 bool nm_esp_enroll(nm_esp_config *config);
+/* Startup only; borrows config during call, copies credentials into SDK. Starts
+ * background network/time task without waiting. Serial setup waits at most 30 s.
+ * Requires initialized state storage; false reports SDK/task startup errors. */
 bool nm_esp_wifi_connect(const nm_esp_config *config);
 bool nm_esp_clock_sync(void);
+/* Borrow-free checkpoint read; 0 means absent/invalid. Storage must be initialized. */
+int64_t nm_esp_storage_clock_load(void);
 bool nm_esp_ota_can_install(const char *url, const char *version, const char *sha256,
                             const char *request_id);
 bool nm_esp_ota_install(const nm_esp_config *config, const char *url, const char *version,
@@ -111,6 +116,11 @@ bool nm_esp_endpoint_configure_limit(unsigned limit);
 nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor);
 nm_esp_state *nm_esp_state_new(const nm_esp_config *config);
 void nm_esp_state_free(nm_esp_state *state);
+/* Processor-owner safe point, after workers drain. One bounded rewrite step;
+ * failures keep sending blocked and are retried without starting probes. */
+bool nm_esp_state_time_step(nm_esp_state *state);
+bool nm_esp_state_time_ready(nm_esp_state *state);
+bool nm_esp_state_time_paused(const nm_esp_state *state);
 void nm_esp_state_set_yield(nm_esp_state *state, bool (*yield)(void *), void *context);
 /* Takes ownership of executor (and its context); frees any previously set one.
  * When set, monitoring runs probes through it concurrently; when NULL, the
@@ -126,9 +136,10 @@ bool nm_esp_state_alert(nm_esp_state *state, const nm_esp_config *config,
                         esp_mqtt_client_handle_t client, const char *operation,
                         yyjson_mut_val *ids);
 bool nm_esp_state_user_event(nm_esp_state *state, yyjson_mut_val *data);
-/* Snapshot current RAM state. Runtime calls once after cycle jobs drain, never
- * per probe/command. Failure leaves live state intact for the next cycle. */
-bool nm_esp_state_save(const nm_esp_state *state);
+/* Commit current state and storage-backed reading blocks after jobs drain,
+ * never per probe/command. Success releases newly stored readings from RAM;
+ * failure retains live state and pauses new probes until the next save retry. */
+bool nm_esp_state_save(nm_esp_state *state);
 bool nm_esp_state_cycle(nm_esp_state *state, const nm_esp_config *config,
                         esp_mqtt_client_handle_t client);
 bool nm_esp_state_ack(nm_esp_state *state, yyjson_mut_val *response);

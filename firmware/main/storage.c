@@ -175,6 +175,23 @@ yyjson_mut_doc *nm_esp_storage_load(const char *key)
     return value;
 }
 
+int64_t nm_esp_storage_clock_load(void)
+{
+    yyjson_mut_doc *snapshot = nm_esp_storage_load("monitoring");
+    yyjson_mut_val *value = yyjson_mut_obj_get(yyjson_mut_doc_get_root(snapshot), "ClockUtc");
+    int64_t saved = yyjson_mut_is_int(value) ? yyjson_mut_get_sint(value) : 0;
+    yyjson_mut_val *clock = yyjson_mut_obj_get(yyjson_mut_doc_get_root(snapshot), "ClockState");
+    yyjson_mut_val *high = yyjson_mut_obj_get(clock, "High");
+    if (yyjson_mut_is_true(yyjson_mut_obj_get(clock, "Valid")) && yyjson_mut_is_uint(high) &&
+        yyjson_mut_get_uint(high) <= UINT32_MAX) {
+        int64_t floor = INT64_C(1640995200) + (int64_t)yyjson_mut_get_uint(high);
+        if (saved < floor)
+            saved = floor;
+    }
+    yyjson_mut_doc_free(snapshot);
+    return saved >= INT64_C(1640995200) && saved <= INT64_C(1640995200) + UINT32_MAX ? saved : 0;
+}
+
 bool nm_esp_storage_has_key(const char *key)
 {
     nvs_handle_t handle;

@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS
-        "main.c" "ble_scanner.c" "ble_buffer.c" "ble_cycle.c"
+        "main.c" "status_led.c" "ble_scanner.c" "ble_buffer.c" "ble_cycle.c"
         # Provisioning, persistent configuration and platform networking.
         "config.c" "config_reset.c" "network.c" "serial_console.c" "wifi_setup.c"
         "enrollment.c" "enrollment_http.c" "enrollment_oauth.c" "enrollment_registration.c"
@@ -15,7 +15,8 @@ idf_component_register(
         "nm_probe_pool.c"
         # Typed model, snapshots and persistence.
         "state.c" "monitor_model.c" "monitor_record.c" "monitor_snapshot.c"
-        "monitor_numbers.c" "monitor_schedule.c" "storage.c"
+        "monitor_numbers.c" "monitor_schedule.c" "monitor_time.c" "storage.c"
+        "ping_backlog.c" "ping_storage.c" "sd_card.c" "monitor_batch.c"
         # Endpoint implementations and firmware installation.
         "endpoints.c" "endpoint_common.c" "endpoint_dns.c" "endpoint_dns_task.c" "endpoint_icmp.c"
         "endpoint_nmap.c" "nmap_runner_embedded.c" "nmap_targets.c" "nmap_arp.c"
@@ -28,7 +29,7 @@ idf_component_register(
                    "service-hints.csv"
     REQUIRES esp_psram spi_flash esp_wifi esp_event esp_netif nvs_flash
              mqtt mbedtls lwip esp_http_client tcp_transport esp_timer esp_https_ota
-             app_update bt espressif__brotli quantum_wolfssl)
+             app_update bt espressif__brotli quantum_wolfssl esp_driver_rmt fatfs sdmmc esp_driver_sdspi esp_driver_spi)
 # Observe fresh ARP replies without replacing the driver input callback or
 # changing lwIP's cache. The wrapper forwards every packet to the real handler.
 target_link_options(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=etharp_input")

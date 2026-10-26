@@ -91,6 +91,8 @@ static bool has_pending(const nm_model *m, int32_t id)
 }
 static void prune(nm_model *m)
 {
+    if (m->retain_infos)
+        return;
     for (size_t i = m->infos.count; i > 0; --i) {
         int32_t id = ((nm_monitor_record *)m->infos.items[i - 1])->MonitorIPID;
         if (!nm_model_host(m, id) && !has_pending(m, id) && !has_removal(&m->removals, id) &&

@@ -64,10 +64,18 @@ Monitoring uses typed C records and bounded collections (`monitor_model.h`),
 not a mutable JSON document. Candidate snapshots share records until changed;
 only changed records are copied. JSON is decoded/encoded at command, storage
 and publication boundaries. Probe results and monitoring commands update RAM;
-one NVS snapshot is attempted per cycle after all accepted probe jobs finish
+one root snapshot is attempted per cycle after all accepted probe jobs finish
 and publication has been attempted. Publication failure does not skip saving;
 save failure does not discard RAM state or prevent later cycles.
-No per-probe or acknowledgement saves, or dirty-state save gating, are used.
+Pending `PingInfos` are paged to SD when mounted, otherwise NVS; RAM retains
+only a bounded delivery window plus new cycle results. Parent/configuration and
+queue cursors remain in the existing NVS root. Monitoring continues during broker
+outages. See [offline storage](offline-storage.md) for transition, capacity,
+logging and failure contracts. No per-probe or acknowledgement saves, or dirty-state save gating, are used.
+The first NTP reply in each boot starts a separate bounded correction transaction:
+pause collection/sending, shift provisional timestamps, and commit each block's
+resumable progress before allowing MQTT to start. This is the explicit exception
+to normal cycle-only snapshots; see [timestamp correction](offline-storage.md#timestamp-correction).
 Power-loss loss of changes since the last snapshot is accepted. The old algorithms under `tests/reference/` are not
 compiled into firmware; they let the same .NET-derived assertions test both
 implementations. See the parity document for ownership and allocation-failure
@@ -124,7 +132,8 @@ processor implementation in this repository.
 
 | Modules | Responsibility |
 |---|---|
-| `config.c`, `config_reset.c`, `network.c` | Config persistence/binding, durable serial resets, Wi-Fi/time |
+| `status_led.*` | Optional single-owner RGB boot/connectivity indicator and nonblocking host-probe flashes |
+| `config.c`, `config_reset.c`, `network.c` | Config persistence/binding, durable serial resets, background Wi-Fi/time and atomic send readiness |
 | `enrollment.c`, `enrollment_oauth.c`, `enrollment_http.c`, `enrollment_registration.c` | Enrollment sequence, device OAuth/identity, bounded HTTPS, signed broker registration |
 | `processor.c`, `processor_mqtt.c`, `processor_commands.c` | Runtime loop, MQTT callback/queue ownership, validated command dispatch |
 | `processor_cmd.c`, `cmd_processor_message.*` | Bounded command worker/replies and .NET output codec |
@@ -134,6 +143,10 @@ processor implementation in this repository.
 | `openssl_arguments.c` | Bounded OpenSSL command parsing/conflicts; see [compatibility report](openssl-adapter.md) |
 | `processor_messages.c`, `message_publish.c`, `processor_ota.c`, `ota.c` | Ready/status payloads, shared encoding, OTA command/job coordination, image installation |
 | `command_security.c`, `command_mldsa.c` | ES256 envelopes or .NET ML-DSA-65 objects, selected strictly by configured capability |
+| `storage.c`, `storage_checkpoint.h` | NVS snapshot I/O and clock checkpoint committed with cycle state |
+| `ping_backlog.*`, `ping_storage.*`, `sd_card.*` | Bounded delivery window, immutable reading blocks in NVS/SD segments, capacity/reclamation and optional SD mount |
+| `monitor_batch.*` | Monitoring payload construction and exact wire-size batching, independent of storage segments |
+| `monitor_time.*` | Known-valid integer ranges, UTC timestamp shifts and resumable correction metadata |
 | `monitor_record.c`, `monitor_snapshot.c`, `monitor_model.c` | Record ownership/JSON codec, snapshot persistence format, monitoring transitions |
 | `monitor_schedule.c` | Typed scheduling, with separate skip/counter/daily evaluation helpers |
 | `endpoints.c`, `endpoint_{dns,icmp,tcp,http}.c`, `endpoint_common.c` | Endpoint dispatch, individual probes and shared deadline/result helpers |

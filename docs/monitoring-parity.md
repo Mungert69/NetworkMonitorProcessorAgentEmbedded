@@ -125,21 +125,23 @@ bash tests/dotnet/generate.sh --check
   ping, removal and swap records. Candidate snapshots share unchanged records;
   mutation copies only the affected record/status. Validate and replace active
   RAM state without writing flash; failed mutations leave live state unchanged.
-- Monitoring persistence follows the .NET in-memory collection / cycle-publication
-  model (`MonitorPingCollection.Merge`, `MonitorPingProcessor.Connect` and
-  `PublishRepo.MonitorPingInfos`). ESP32 attempts one complete NVS snapshot per
-  cycle after all accepted probe jobs drain and publication is attempted, including
-  empty, paused and failed probe cycles. There is no dirty-state save gating.
-  Like the .NET publisher, ESP32 attempts delivery before saving.
-  No per-probe, scheduling, acknowledgement, monitor-update or alert-command
-  saves occur. Boot imports state in RAM; legacy migration is first saved at the
-  next cycle. Credential/configuration and OTA security persistence are separate.
+- Parent/configuration state follows the established typed model and cycle-commit
+  ownership contract. Pending-reading storage and disconnected monitoring are
+  intentional ESP32 extensions; see [offline storage](offline-storage.md). The
+  .NET reference is authoritative for wire fields, IDs, counters and acknowledgement
+  matching, not this new paging/storage-selection behaviour. After accepted jobs
+  drain and publication is attempted, save immutable new pages, then commit one
+  NVS root with configuration/parents and bounded queue cursors/ack masks. The root
+  contains no stored `PingInfos`; pages use SD when mounted, otherwise NVS.
+  Empty/paused/failed cycles still attempt persistence, without dirty-state gating.
+  No per-probe, scheduling, acknowledgement, monitor-update or alert-command saves
+  occur. Credential/configuration and OTA security persistence are separate.
 - A failed snapshot save is logged and the cycle reports failure, but RAM data
   is retained. Publication has already been attempted; publication failure never
   skips the save. Retry occurs at the next cycle.
   Power loss may lose new results/configuration changes since the last snapshot
   or replay previously acknowledged ping IDs. This is an accepted trade-off;
-  there is no journal or extra acknowledgement checkpoint mechanism.
+  acknowledgement masks are committed with the normal cycle root, not separately.
 - Scheduler counters, per-host skip counters and daily slots are typed arrays.
   Endpoint execution receives a typed monitor; the per-cycle plan is an array
   of monitor IDs rather than another copy of all monitor objects.
@@ -182,8 +184,11 @@ bash tests/dotnet/generate.sh --check
   malloc prefers PSRAM); enrollment retains its separate 64 KiB receive limit.
 - Alert publication failure does not suppress data publication. Retries also run
   when the active monitor list is empty or the pending limit is reached.
-- `max_monitors` and `max_pending_ping_infos` remain configuration limits. The
-  monitoring JSON is serialized unchanged, then stored as a versioned Brotli
+- `max_monitors` remains the monitor bound; `max_pending_ping_infos` sizes a
+  bounded delivery window rather than the entire pending backlog. Storage space
+  and, for NVS, 64 page slots bound the backlog independently. See
+  [capacity policy](offline-storage.md#capacity-and-logs). The parent/configuration
+  root JSON (empty `PingInfos` plus private `PingBacklog` metadata) is stored as a versioned Brotli
   quality-zero NVS blob. The uncompressed JSON is capped at 1 MiB and the stored
   blob at 512 KiB; an oversized snapshot fails to save without replacing durable
   state, while the RAM model remains intact. Boot still reads legacy raw JSON
@@ -574,3 +579,20 @@ building does not flash a board. Validate with sanitizer-enabled native tests
 negative current, both execution paths, pending breach transport, reset and
 retrigger. Backend rollout details are also recorded in the Data repository
 under `tools/measurement-alerts.md`.
+
+## Offline startup clock adaptation
+
+ESP32 monitoring starts using a saved per-cycle NVS clock checkpoint without
+waiting for Wi-Fi/NTP. With no checkpoint it uses the provisional 2022 wire epoch.
+A separate task owns bounded Wi-Fi retry backoff and NTP attempts. Outbound
+monitoring waits for Wi-Fi plus an actual NTP reply in the current boot; restored
+time alone never establishes readiness. The first NTP reply pauses monitoring
+and corrects provisional PingInfos outside a persisted valid integer range;
+parent dates are shifted directly. Bounded immutable-block rotation and durable
+progress support restart without double correction. Sending starts only after
+the final commit. Normal NTP stops after its first reply in each boot; uptime
+drift and subsecond boundary ambiguity are accepted. Pending data survives reboot;
+multiple unsynchronized power losses still have approximate historical times.
+UTC-based schedules use the provisional clock until corrected. No
+wire fields, ID types or backend acknowledgements change. OTA still requires
+a fresh NTP reply, not merely historical synchronization or backend connectivity.

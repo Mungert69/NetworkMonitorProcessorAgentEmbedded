@@ -14,6 +14,7 @@
  *   -lbrotlienc -lbrotlidec -lbrotlicommon -lcrypto -lm -o /tmp/test_state_adapter
  */
 #include "nm_esp.h"
+#include "ping_storage_memory.h"
 #include "ble_buffer.h"
 #include <math.h>
 #include "message_publish.h"
@@ -43,6 +44,25 @@ static struct {
     yyjson_mut_doc *doc;
 } storage[] = {{"monitoring", NULL}, {"processor", NULL}, {"monitors", NULL}};
 static unsigned save_calls, fail_save_at, probe_count;
+extern int64_t nm_test_recording_utc;
+static bool network_ready = true, correction_pending;
+static int64_t correction_seconds;
+bool nm_network_correction(int64_t *offset)
+{
+    if (offset)
+        *offset = correction_seconds;
+    return correction_pending;
+}
+void nm_network_accept_correction(void)
+{
+    network_ready = true;
+    correction_pending = false;
+    nm_test_recording_utc = 0;
+}
+bool nm_network_ready(void)
+{
+    return network_ready;
+}
 static bool cycle_active;
 static unsigned cycle_save_baseline;
 static nm_probe_executor *observed_executor;
@@ -175,7 +195,12 @@ static void cleanup(void)
 static void reset(void)
 {
     cleanup();
+    nm_test_ping_reset();
     nm_ble_buffer_reset();
+    network_ready = true;
+    correction_pending = false;
+    correction_seconds = 0;
+    nm_test_recording_utc = 0;
     save_calls = fail_save_at = 0;
     cycle_active = false;
     observed_executor = NULL;
@@ -1288,9 +1313,10 @@ static void test_measurement_limits(void)
 {
     for (unsigned concurrent = 0; concurrent < 2; ++concurrent) {
         reset();
-        nm_esp_state *s = initialized(
-            "{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"AA:BB:CC:DD:EE:FF\",\"EndPointType\":\"blebroadcast\","
-            "\"Enabled\":true,\"LowThreshold\":-1,\"HighThreshold\":2}]}");
+        nm_esp_state *s =
+            initialized("{\"MonitorIPs\":[{\"ID\":7,\"Address\":\"AA:BB:CC:DD:EE:FF\","
+                        "\"EndPointType\":\"blebroadcast\","
+                        "\"Enabled\":true,\"LowThreshold\":-1,\"HighThreshold\":2}]}");
         if (concurrent)
             nm_esp_state_set_probe_executor(s, fake_executor_new(1, false, false));
         endpoint_result.has_sample = true;
@@ -1373,12 +1399,188 @@ static void test_measurement_samples(void)
         }
 }
 
+static void test_storage_delivery_ack_window(void)
+{
+    reset();
+    nm_test_ping_mode = NM_PING_STORAGE_SD;
+    nm_esp_state *s = initialized(one_enabled);
+    for (unsigned iteration = 0; iteration < 2; ++iteration) {
+        clear_messages();
+        CHECK(cycle(s));
+        bool published = false;
+        for (size_t i = 0; i < message_count; ++i) {
+            if (strcmp(messages[i].topic, "processor/out/data"))
+                continue;
+            yyjson_mut_doc *wire = decode(i);
+            yyjson_mut_val *pings = GET(ROOT(wire), "PingInfos");
+            CHECK(SIZE(pings) == iteration);
+            if (iteration)
+                CHECK(number(AT(pings, 0), "ID") == 1);
+            yyjson_mut_doc_free(wire);
+            published = true;
+        }
+        CHECK(published);
+    }
+    CHECK(nm_esp_state_pending_ping_count(s) == 2);
+    yyjson_mut_doc *ack = parse("{\"RemovePingInfos\":[{\"ID\":1}]}");
+    CHECK(nm_esp_state_ack(s, ROOT(ack)));
+    yyjson_mut_doc_free(ack);
+    CHECK(nm_esp_state_pending_ping_count(s) == 1);
+    CHECK(nm_esp_state_save(s));
+    nm_esp_state_free(s);
+    s = nm_esp_state_new(&config);
+    CHECK(s && nm_esp_state_pending_ping_count(s) == 1);
+    yyjson_mut_doc *disabled = parse(one_disabled);
+    CHECK(nm_esp_state_init(s, &config, ROOT(disabled)));
+    yyjson_mut_doc_free(disabled);
+    clear_messages();
+    CHECK(cycle(s));
+    bool published = false;
+    for (size_t i = 0; i < message_count; ++i) {
+        if (strcmp(messages[i].topic, "processor/out/data"))
+            continue;
+        yyjson_mut_doc *wire = decode(i);
+        yyjson_mut_val *pings = GET(ROOT(wire), "PingInfos");
+        CHECK(SIZE(pings) == 1 && number(AT(pings, 0), "ID") == 2);
+        yyjson_mut_doc_free(wire);
+        published = true;
+    }
+    CHECK(published);
+    nm_esp_state_free(s);
+    nm_test_ping_reset();
+}
+
+static void test_storage_backed_offline(void)
+{
+    for (unsigned concurrent = 0; concurrent < 2; ++concurrent) {
+        reset();
+        nm_test_ping_mode = NM_PING_STORAGE_SD;
+        config.max_pending_ping_infos = 1; /* Working window, not backlog capacity. */
+        nm_esp_state *s = initialized(one_enabled);
+        if (concurrent)
+            nm_esp_state_set_probe_executor(s, fake_executor_new(4, false, false));
+        network_ready = false; /* Broker alone must not bypass the NTP gate. */
+        for (unsigned i = 0; i < 20; ++i) {
+            CHECK(nm_esp_state_cycle(s, &config, &broker));
+            CHECK(nm_esp_state_pending_ping_count(s) == i + 1);
+            CHECK(SIZE(GET(data(), "PingInfos")) == 0);
+        }
+        CHECK(probe_count == (concurrent ? 0U : 20U) && message_count == 0);
+        nm_esp_state_free(s);
+        s = nm_esp_state_new(&config);
+        CHECK(s && nm_esp_state_monitor_count(s) == 1);
+        CHECK(nm_esp_state_pending_ping_count(s) == 20);
+        yyjson_mut_doc *disabled = parse(one_disabled);
+        CHECK(nm_esp_state_init(s, &config, ROOT(disabled)));
+        yyjson_mut_doc_free(disabled);
+        network_ready = true;
+        correction_pending = false;
+        correction_seconds = 0;
+        nm_test_recording_utc = 0;
+        unsigned uploaded = 0;
+        for (unsigned retry = 0; retry < 50 && nm_esp_state_pending_ping_count(s); ++retry) {
+            clear_messages();
+            CHECK(cycle(s));
+            CHECK(probe_count == (concurrent ? 0U : 20U));
+            for (size_t i = 0; i < message_count; ++i) {
+                if (strcmp(messages[i].topic, "processor/out/data"))
+                    continue;
+                yyjson_mut_doc *wire = decode(i);
+                yyjson_mut_val *pings = GET(ROOT(wire), "PingInfos");
+                uploaded += (unsigned)SIZE(pings);
+                yyjson_mut_doc *ack = parse("{\"RemovePingInfos\":[]}");
+                for (size_t j = 0; j < SIZE(pings); ++j) {
+                    yyjson_mut_val *item = yyjson_mut_obj(ack);
+                    CHECK(yyjson_mut_obj_add_uint(ack, item, "ID", number(AT(pings, j), "ID")));
+                    CHECK(yyjson_mut_arr_append(GET(ROOT(ack), "RemovePingInfos"), item));
+                }
+                CHECK(nm_esp_state_ack(s, ROOT(ack)));
+                yyjson_mut_doc_free(ack);
+                yyjson_mut_doc_free(wire);
+            }
+        }
+        CHECK(uploaded == 20 && nm_esp_state_pending_ping_count(s) == 0);
+        CHECK(nm_esp_state_save(s));
+        nm_esp_state_free(s);
+        s = nm_esp_state_new(&config);
+        CHECK(s && nm_esp_state_pending_ping_count(s) == 0);
+        nm_esp_state_free(s);
+    }
+    nm_test_ping_reset();
+}
+
+static void test_first_sync_correction(void)
+{
+    for (unsigned paged = 0; paged < 2; ++paged) {
+        reset();
+        if (paged)
+            nm_test_ping_mode = NM_PING_STORAGE_SD;
+        nm_test_recording_utc = (int64_t)time(NULL) - 600;
+        uint32_t original = (uint32_t)(nm_test_recording_utc - INT64_C(1640995200));
+        network_ready = false;
+        nm_esp_state *s = initialized(one_enabled);
+        for (unsigned i = 0; i < 5; ++i)
+            CHECK(cycle(s));
+        CHECK(message_count == 0 && nm_esp_state_pending_ping_count(s) == 5);
+        correction_pending = true;
+        correction_seconds = 600;
+        fail_save_at = save_calls + (paged ? 2 : 1);
+        CHECK(!nm_esp_state_time_step(s));
+        CHECK(nm_esp_state_time_paused(s) && !network_ready);
+        if (paged) {
+            CHECK(number(stored(), "ClockUtc") == (uint64_t)nm_test_recording_utc);
+            /* Retrying the preliminary raw flush must retain its raw checkpoint. */
+            fail_save_at = save_calls + 2;
+            CHECK(!nm_esp_state_time_step(s));
+            CHECK(number(stored(), "ClockUtc") == (uint64_t)nm_test_recording_utc);
+        }
+        fail_save_at = 0;
+        CHECK(nm_esp_state_time_step(s));
+        if (paged) {
+            CHECK(!nm_esp_state_time_ready(s));
+            nm_esp_state_free(s);
+            s = nm_esp_state_new(&config);
+            CHECK(s);
+            /* A new boot's offset must not replace an in-progress old one. */
+            correction_seconds = 1234;
+        }
+        for (unsigned i = 0; i < 20 && !nm_esp_state_time_ready(s); ++i)
+            CHECK(nm_esp_state_time_step(s));
+        CHECK(nm_esp_state_time_ready(s) && network_ready && !nm_esp_state_time_paused(s));
+        unsigned before = save_calls;
+        CHECK(nm_esp_state_time_step(s) && save_calls == before); /* Exactly once. */
+        clear_messages();
+        CHECK(cycle(s));
+        unsigned seen = 0;
+        for (size_t i = 0; i < message_count; ++i) {
+            if (strcmp(messages[i].topic, "processor/out/data"))
+                continue;
+            yyjson_mut_doc *wire = decode(i);
+            yyjson_mut_val *pings = GET(ROOT(wire), "PingInfos");
+            for (size_t j = 0; j < SIZE(pings); ++j) {
+                yyjson_mut_val *p = AT(pings, j);
+                if (number(p, "ID") <= 5) {
+                    CHECK(number(p, "DateSentInt") == original + 600);
+                    ++seen;
+                }
+            }
+            yyjson_mut_doc_free(wire);
+        }
+        CHECK(seen == 5);
+        nm_esp_state_free(s);
+    }
+    reset();
+}
+
 int main(int argc, char **argv)
 {
     const struct {
         const char *name;
         void (*run)(void);
-    } tests[] = {{"ble_cycle_buffer", test_ble_cycle_buffer},
+    } tests[] = {{"first_sync_correction", test_first_sync_correction},
+                 {"storage_delivery_ack_window", test_storage_delivery_ack_window},
+                 {"storage_backed_offline", test_storage_backed_offline},
+                 {"ble_cycle_buffer", test_ble_cycle_buffer},
                  {"measurement_limits", test_measurement_limits},
                  {"measurement_samples", test_measurement_samples},
                  {"base64", test_base64},

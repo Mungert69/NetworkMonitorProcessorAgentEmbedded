@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include "monitor_model.h"
+#include "monitor_time.h"
 #include "monitor_numbers.h"
 #include "monitor_schedule_typed.h"
 #include "nm_json.h"
@@ -57,7 +58,9 @@ void nm_model_close(nm_model *m)
 bool nm_model_clone(nm_model *out, const nm_model *m)
 {
     memset(out, 0, sizeof(*out));
+    out->clock = m->clock;
     out->sequence = m->sequence;
+    out->retain_infos = m->retain_infos;
     out->params = (nm_params_record *)nm_record_retain((nm_record *)m->params);
     out->flow = (nm_flow_record *)nm_record_retain((nm_record *)m->flow);
     out->root_extra = nm_extension_retain(m->root_extra);
@@ -96,6 +99,8 @@ bool nm_model_open(nm_model *m, yyjson_mut_val *snapshot, yyjson_mut_val *legacy
                                             : nm_record_new(NM_PARAMS));
     m->flow = (nm_flow_record *)(flow ? nm_record_decode(NM_FLOW, flow) : nm_record_new(NM_FLOW));
     if (!m->params || !m->flow)
+        goto fail;
+    if (!nm_monitor_time_decode(&m->clock, GET(snapshot, "ClockState")))
         goto fail;
     m->sequence = 1;
     if (data && GET(data, "PiIDKey") && !nm_monitor_u32(GET(data, "PiIDKey"), &m->sequence))
@@ -156,6 +161,7 @@ bool nm_model_open(nm_model *m, yyjson_mut_val *snapshot, yyjson_mut_val *legacy
     yyjson_mut_obj_remove_key(root, "PingParams");
     yyjson_mut_obj_remove_key(root, "AgentUserFlow");
     yyjson_mut_obj_remove_key(root, "Schedule");
+    yyjson_mut_obj_remove_key(root, "ClockState");
     m->root_extra = nm_extension_create(root);
     yyjson_mut_doc_free(rest);
     if (!m->root_extra)
@@ -201,6 +207,9 @@ yyjson_mut_doc *nm_model_encode(const nm_model *m)
         !yyjson_mut_obj_add_val(doc, root, "AgentUserFlow",
                                 nm_record_encode(doc, (nm_record *)m->flow)) ||
         !yyjson_mut_obj_add_uint(doc, data, "PiIDKey", m->sequence))
+        goto fail;
+    if (m->clock.present &&
+        !yyjson_mut_obj_add_val(doc, root, "ClockState", nm_monitor_time_encode(doc, &m->clock)))
         goto fail;
     for (size_t i = 0; i < 6; ++i) {
         const nm_records *a = collections((nm_model *)m, i);

@@ -61,8 +61,9 @@ Within `firmware/main/`, put work in the following places:
 | Module | Responsibility—not a place for unrelated helpers |
 |---|---|
 | `main.c` | Boot sequence |
+| `status_led.*` | Optional single-owner RMT RGB indicator; atomic stage/connectivity/probe notifications |
 | `config.c`, `config_reset.c` | Config loading/saving/binding; durable reset markers |
-| `network.c` | Wi-Fi and clock synchronization |
+| `network.c`, `network.h` | Background Wi-Fi retry/time-sync owner and atomic send readiness |
 | `serial_console.c`, `wifi_setup.c` | Serial commands and Wi-Fi setup |
 | `enrollment.c` | Coordinate enrollment stages |
 | `enrollment_oauth.c`, `enrollment_http.c` | Device authorization/identity; bounded HTTPS transport |
@@ -81,12 +82,16 @@ Within `firmware/main/`, put work in the following places:
 | `processor_ota.c`, `ota.c` | OTA command/job coordination; installation and health/rollback lifecycle |
 | `command_security.c`, `command_mldsa.c` | Signature policy, ES256 envelopes and byte-preserving ML-DSA-65 object verification |
 | `state.c` | Transactional model updates, probe cycles and delivery orchestration |
+| `monitor_time.*` | Integer-range timestamp correction, UTC date shifting and private correction metadata codec |
 | `monitor_model.c` | Monitoring/reconciliation/status transitions on typed records |
 | `monitor_record.c`, `monitor_snapshot.c` | Record ownership/JSON codec; snapshot encoding/loading/cloning |
 | `monitor_schedule.c` | Typed strategy state and skip/counter/random/daily decisions |
 | `monitor_numbers.c` | Contract-aware numeric conversions |
 | `nm_memory.h`, `nm_json.h` | Bulk PSRAM allocation and JSON allocator/ownership boundary; host libc adapters |
-| `storage.c` | Bounded NVS storage adapter |
+| `storage.c`, `storage_checkpoint.h` | Bounded NVS root snapshots and per-cycle clock checkpoint |
+| `ping_backlog.*` | Bounded RAM delivery window, immutable pending-reading pages and cycle commit |
+| `ping_storage.*`, `sd_card.*` | NVS blocks/SD segments, capacity/reclamation and optional SPI FAT mount; see `docs/offline-storage.md` |
+| `monitor_batch.*` | Storage-independent monitoring payload batching at the existing wire-size limit |
 | `endpoints.c` | Supported endpoint selection and dispatch |
 | `endpoint_dns.c`, `endpoint_icmp.c`, `endpoint_tcp.c`, `endpoint_http.c` | Individual probe implementations |
 | `ble_scanner.c`, `ble_buffer.*`, `ble_cycle.*`, `ble_endpoint_policy.h`, `ble_filter.h`, `endpoint_ble.c`, `ble_decoder.*`, `ble_crypto.*`, `ble_*_decoder.c`, `ble_victron_records.c`, `ble_metric.*`, `ble_metric_catalogue.inc` | Shared passive BLE scan, PSRAM address history/immutable cycle snapshots, decoder registry, manufacturer/device layouts and PSA crypto; see `docs/ble-decoders.md`; no model mutations in callbacks |
@@ -193,11 +198,27 @@ exercise the firmware's encoder in host publication/parity tests.
   Failed saves leave RAM intact and the previous durable snapshot unchanged;
   log the failure and retry at the next cycle. Power-loss
   loss of changes since the last snapshot is an accepted device trade-off.
+- The first NTP synchronization in each boot uses the bounded, resumable
+  timestamp-correction transaction in [offline storage](docs/offline-storage.md#timestamp-correction).
+  This is the explicit exception to one snapshot commit per normal cycle:
+  collection/sending pause while each corrected block and its progress commit.
+  Keep the original valid integer range and offset stable until completion;
+  MQTT starts only after the corrected root is durable. Ordinary NTP stops after
+  its first successful reply; OTA's fresh-NTP security check remains separate.
 - MQTT publish acceptance/PUBACK is NOT the acknowledgement for pending pings.
   Apply backend `removePingInfos` semantics, including reconciliation records,
   in RAM; include the resulting state in the next cycle snapshot. Do not discard
   pending data on reconnect or restore a publication snapshot over live state.
-- Respect configured monitor/pending limits and independent byte/storage limits.
+- Pending `PingInfos` use the storage-backed queue described in
+  [offline storage](docs/offline-storage.md). SD is selected at boot when mounted;
+  otherwise NVS. Configuration/parents and the bounded queue cursor stay in the
+  existing NVS root. Pending readings are not duplicated there. First adoption or
+  a backing-store change deliberately discards the old backlog, as authorised,
+  retaining configuration and sequence/state. This is an intentional ESP32
+  adaptation, not .NET storage parity. Save immutable pages then one root commit
+  per cycle; no per-probe or per-command persistence. Failed saves retain RAM
+  and pause new probes until retry.
+- Respect configured monitor/working-window limits and independent byte/storage limits.
   At capacity, preserve pending data and use the existing retry/pause behaviour;
   do not grow buffers or silently drop samples. Brotli quality remains zero.
 - Preserve scheduler ordering and persisted skip/counter/daily history.

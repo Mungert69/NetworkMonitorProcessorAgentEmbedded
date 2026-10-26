@@ -253,7 +253,10 @@ TAP mode proves real packet reachability, but `esp-emu` guest millisecond timing
 
 The ESP32 uses the selected appsettings template during provisioning, but does not need a copied .NET processor configuration, `.env`, or monitor list. Use the native OAuth setup above. Monitors arrive from the backend through authenticated registration and normal processor commands; no monitor-seeding config is supported. Protected commands require the configured ML-DSA-65 or ECDSA P-256 signature against the compiled public trust anchor, with no unsigned bypass.
 
-The device holds configuration and credentials in `nmconfig`, while monitor and pending-ping state lives in `nmdata`. Both partitions survive normal OTA app updates. Initial flash images contain the Wi-Fi password; enrolled flash images also contain extractable broker credentials. Protect them and never commit or distribute them. NVS encryption and hardware flash encryption are **not enabled** by this emulator profile. A physical production device needs a deliberate Secure Boot V2, flash-encryption, key-provisioning, and recovery procedure before being trusted with live credentials.
+The device holds configuration and credentials in `nmconfig`. Monitor configuration,
+parent state and pending-queue cursors live in `nmdata`; pending `PingInfos` use
+SD when mounted, otherwise NVS pages in `nmdata`. See [offline storage](offline-storage.md)
+for the default SD wiring, capacity logs, store-switch discard policy and recovery. Both partitions survive normal OTA app updates. Initial flash images contain the Wi-Fi password; enrolled flash images also contain extractable broker credentials. Protect them and never commit or distribute them. NVS encryption and hardware flash encryption are **not enabled** by this emulator profile. A physical production device needs a deliberate Secure Boot V2, flash-encryption, key-provisioning, and recovery procedure before being trusted with live credentials.
 
 OTA is triggered by a `processorFirmwareUpdate` command on the processor's own MQTT v2 command route. CloudEvent `data` must contain `AuthKey`, the matching `AppID`, `ExpiresAtUnixSeconds` (within the next five minutes), `RequestId` (lowercase UUID), `Version` (strict numeric `major.minor.patch`), `Sha256` (lowercase hex), and an HTTPS `UpdateUrl` ending in `/<Sha256>.bin`. It downloads only a signed **app binary**, never a full-flash image. TLS validation, complete-download checks, raw-image SHA-256, the embedded app version, and ESP-IDF's app signature are checked before selecting the inactive slot. Downloading is bounded to five minutes plus the current HTTP operation's timeout. From 0.1.8, authenticated owners may upgrade or downgrade; the running version itself and the last accepted/pending request ID are still rejected. Accepted metadata survives reboot in `nmdata`. This intentionally removes the monotonic version floor, not signature or request validation. Older running firmware must first upgrade to 0.1.8 or newer to accept downgrades. After a downgrade, the installed release's own OTA policy applies. Hardware eFuse anti-rollback is not enabled.
 
@@ -440,27 +443,31 @@ The old single-slot emulator flash image cannot be converted by OTA. For the one
 
 ### Delivery and persistence
 
-The firmware publishes ready and data using MQTT QoS 1. A broker PUBACK does **not** clear pending pings; only backend `removePingInfos` does. At the configured pending limit, probes pause and stored data is resent. NVS flash wear and long-term retention still need measurement on hardware.
+The firmware publishes ready and data using MQTT QoS 1. A broker PUBACK does
+**not** clear pending pings; only backend `removePingInfos` does. Pending readings
+use SD storage when mounted at boot, otherwise NVS. The configured pending count
+sizes a bounded RAM delivery window; backing-store capacity determines when new
+probes pause. See [offline storage](offline-storage.md) for limits, delivery timing,
+store-switch discard policy and capacity logs.
 
-Monitoring configuration, pending data, reconciliation queues, user-flow flags and
-scheduler state now share one `monitoring` JSON snapshot in NVS. The firmware
-uses typed records/collections in RAM and constructs JSON only at its storage
-and messaging boundaries. The stored schema remains unchanged by this refactor.
-Probe results and incoming monitoring commands update the PSRAM model, not NVS.
-Each cycle attempts one snapshot save after its accepted probe jobs finish and
-before publishing, even when no probes ran. There are no per-probe or per-ack
-writes and no dirty-state save gating. Changes arriving during publication are
-included next cycle. Failed saves preserve RAM and the previous NVS snapshot;
-delivery is still attempted. Power loss can lose changes since the last save or
-replay already-acknowledged ping IDs. This trade-off is intentional. OAuth/config
-and OTA metadata retain their separate persistence rules.
-The firmware
-imports the old `monitors`/`processor` blobs without floating-point conversion of
-IDs, then retires the old blobs only after the new snapshot is committed. Do not
-downgrade an active device to code that only reads the old blobs: they are
-migration inputs, not mirrored state.
-Configuration/OAuth/OTA metadata retain their separate storage and trust rules.
-See [monitoring parity](monitoring-parity.md) for tests and limits.
+Monitoring configuration, parent records, reconciliation queues, user-flow flags,
+scheduler state and the pending-queue cursor share the `monitoring` snapshot in
+NVS. Individual PingInfos occupy separate backing-store blocks. Typed records
+remain in RAM for active work; JSON belongs at storage and messaging boundaries.
+Each cycle attempts publication after accepted probe jobs finish, then attempts
+one snapshot save even when no probes ran or publication failed. New blocks are
+written before the root commit. There are no per-probe or per-ack writes and no
+dirty-state save gating. Publication-time acknowledgements update RAM before
+that snapshot. Failed saves preserve RAM and the previous durable root. Power
+loss can lose changes since the last save or replay uncommitted acknowledgements.
+OAuth/config and OTA metadata retain their separate persistence and trust rules.
+
+Legacy `monitors`/`processor` blobs are imported without floating-point conversion
+of IDs and retired only after the new root commits. First adoption of paged
+storage deliberately discards pending readings while preserving configuration,
+parents, counters and scheduler history. Old firmware cannot deliver a paged
+backlog. NVS flash wear, SD power-loss behaviour and retention still need hardware
+measurement. See [monitoring parity](monitoring-parity.md) for preserved contracts.
 
 ## First physical board (development setup)
 
@@ -551,3 +558,78 @@ is for locally built images and must not be substituted for the public guide.
 
 The root CMake project runs host tests against actual native firmware code, not
 a copied Linux processor. See [the test instructions](developer-reference.md#tests).
+
+## Boot, router recovery and RGB indicator
+
+Enrolled devices start Bluetooth and monitoring without waiting for Wi-Fi or
+NTP. A dedicated `nm_network` task owns connection attempts and time service;
+monitor cycles only read its atomic readiness flag and never wait for network
+recovery. Wi-Fi attempts start immediately, then wait 5, 15, 30 and 60 seconds,
+remaining at one request per minute. Disconnect callbacks do not reconnect.
+A successful connection resets the backoff. An SDK attempt may still be in
+progress when a retry is due; that request does not force a new scan.
+
+While Wi-Fi is available, NTP attempts have a 15-second response window and a
+60-second retry delay after completion/failure. The task stops the SDK time
+service between attempts, avoiding independent background retransmissions.
+A successful reply and a durable timestamp correction are required in **this
+boot** before MQTT starts or monitoring data is published. Backend reachability
+alone is insufficient. Normal NTP retries stop after the first successful reply;
+this is a once-per-boot operation, not a periodic history rewrite. Wi-Fi loss
+still blocks sending and reconnects use the existing synchronized clock. OTA
+retains its separate fresh-reply requirement; only that explicit security check
+may request another synchronization. Clock drift during long uptime is accepted.
+Interactive Wi-Fi setup retains its bounded 30-second check;
+initial enrollment waits for Wi-Fi and NTP before verified HTTPS/MQTT.
+
+Each monitoring snapshot commit includes a `ClockUtc` checkpoint inside the same
+NVS snapshot blob, with no extra per-probe writes. Boot restores it when the
+system clock is unset or older than the saved valid-range upper bound. With no
+usable checkpoint, the provisional baseline is
+2022-01-01 (the wire date epoch). Startup logs mark time unverified, and each
+successful NTP attempt logs the clock correction. The checkpoint is approximate:
+readings before synchronization can be behind by the powered-off duration plus
+time since the last save. Until correction commits, recordings continue on the
+boot's provisional monotonic timeline even after NTP updates the system clock.
+At the next processor safe point, probes/sending pause and cyan flashes rapidly.
+Integer-second correction leaves pings inside the persisted known-valid range
+unchanged and shifts the others, updating both `DateSentInt` and `DateSent`.
+Parent start/end dates and nested status/breach event times receive the offset.
+Stored readings rotate one block at a time, committing resumable progress before
+retiring each original. Only the final durable root opens the send gate.
+See [correction recovery and trade-offs](offline-storage.md#timestamp-correction).
+UTC-dependent schedules use the provisional clock until correction completes.
+See [validation results](offline-storage.md#validation) for the tested build,
+physical startup/delivery evidence and fault-injection limits.
+
+The plain YD-ESP32-S3 board's WS2812 RGB LED uses GPIO48 (the separate Hal9000
+display board uses GPIO40). This is independent of the fixed power LED.
+`status_led.c` uses Hal9000's 10 MHz RMT/GRB waveform and single hardware-owner
+task pattern. Colours flash for 160 ms once per second while waiting:
+
+| Colour | Meaning |
+| --- | --- |
+| Blue | Hardware/configuration startup or serial setup |
+| Yellow | Startup waiting for Wi-Fi/IP |
+| Cyan | Wi-Fi available, waiting for first NTP synchronization; collection continues |
+| Purple | Device enrollment |
+| White | State/backing-store and processor initialization |
+| Amber | Processor running, Wi-Fi or backend MQTT disconnected; readings continue into backing storage |
+| Red | Startup failed; serial log identifies the failing stage |
+| Fast cyan | Collection/sending paused for timestamp correction or its storage retry |
+| Brief green | A valid monitor host probe has started, regardless of its eventual result |
+| Brief blue | Monitoring-data batch accepted for publication, not a backend acknowledgement |
+| Off between activity flashes | Normal running with Wi-Fi, time and MQTT available |
+
+Each probe requests a 40 ms green pulse without blocking. Requests inside one
+indicator interval coalesce; concurrent hosts may therefore share a flash.
+Accepted monitoring-data batches request a 120 ms blue pulse (multiple batches
+may share a pulse). Blue takes priority over green and is suppressed while
+disconnected so the amber outage indication remains visible. Green probe pulses
+can also appear while waiting for time.
+The LED task alone waits for RMT, at priority 1 with a 3 KiB stack. Producers use
+internal atomic flags; no monitor data, queues or allocations cross this boundary.
+Optional LED failure logs a warning and leaves monitoring running. For a different
+board, override `NM_STATUS_LED_GPIO` at compile time (`-1` disables the indicator);
+ensure the chosen pin does not overlap SD or other peripherals. Very short boot
+stages may finish before a flash is visible; boot is never delayed for an effect.

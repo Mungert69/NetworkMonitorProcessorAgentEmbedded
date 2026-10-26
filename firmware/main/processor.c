@@ -8,6 +8,9 @@
 #include "ble_buffer.h"
 #include "processor_internal.h"
 #include "processor_mqtt_buffer.h"
+#include "ping_storage.h"
+#include "status_led.h"
+#include "network.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -41,11 +44,12 @@ static bool yield_commands(void *context)
         free(incoming.body);
     }
     nm_processor_cmd_poll(agent);
-    return agent->connected && !agent->updating;
+    return !agent->updating;
 }
 
 void nm_esp_processor_run(const nm_esp_config *config)
 {
+    nm_status_led_stage(NM_LED_STORAGE);
     processor *agent = calloc(1, sizeof(*agent));
     if (!agent)
         return;
@@ -61,6 +65,8 @@ void nm_esp_processor_run(const nm_esp_config *config)
         ESP_LOGE(TAG, "state storage unavailable; processor cannot run safely");
         goto fail;
     }
+    if (!nm_ping_storage_init(config->root, config->app_id))
+        goto fail;
     agent->state = nm_esp_state_new(config);
     agent->queue = xQueueCreate(NM_ESP_COMMAND_QUEUE_CAPACITY, sizeof(command));
     if (!agent->state || !agent->queue) {
@@ -105,7 +111,7 @@ void nm_esp_processor_run(const nm_esp_config *config)
         .credentials.client_id = config->routing_id,
         .credentials.authentication.password = config->mqtt_password,
         .session.keepalive = 120,
-        .network.reconnect_timeout_ms = 2000,
+        .network.reconnect_timeout_ms = 60000,
         .buffer.size = NM_ESP_MAX_COMMAND + 1024,
         /* ESP-MQTT allocates separate receive/output buffers. Large incoming
          * signed inits need the receive buffer; publications are streamed. */
@@ -117,8 +123,7 @@ void nm_esp_processor_run(const nm_esp_config *config)
     agent->client = esp_mqtt_client_init(&mqtt);
     if (!agent->client ||
         esp_mqtt_client_register_event(agent->client, ESP_EVENT_ANY_ID, nm_processor_mqtt_event,
-                                       agent) != ESP_OK ||
-        esp_mqtt_client_start(agent->client) != ESP_OK) {
+                                       agent) != ESP_OK) {
         ESP_LOGE(TAG, "MQTT startup failed");
         goto fail;
     }
@@ -126,11 +131,27 @@ void nm_esp_processor_run(const nm_esp_config *config)
              "processor started routing_id=%s max_monitors=%u pending_limit=%u command_queue=%u",
              config->routing_id, config->max_monitors, config->max_pending_ping_infos,
              (unsigned)NM_ESP_COMMAND_QUEUE_CAPACITY);
+    nm_status_led_stage(NM_LED_RUNNING);
     TickType_t next_poll = xTaskGetTickCount() + pdMS_TO_TICKS(agent->poll_seconds * 1000);
     TickType_t next_health = xTaskGetTickCount() + pdMS_TO_TICKS(10000);
+    bool mqtt_started = false;
     for (;;) {
+        if (!nm_esp_state_time_step(agent->state)) {
+            ESP_LOGW(TAG, "Timestamp correction failed; collection/sending paused, retry in 1 s");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        bool time_paused = nm_esp_state_time_paused(agent->state);
+        if (time_paused)
+            vTaskDelay(pdMS_TO_TICKS(10));
+        if (!mqtt_started && nm_network_ready()) {
+            if (esp_mqtt_client_start(agent->client) == ESP_OK)
+                mqtt_started = true;
+            else
+                ESP_LOGW(TAG, "MQTT start failed; will retry");
+        }
         command incoming;
-        if (xQueueReceive(agent->queue, &incoming, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        if (xQueueReceive(agent->queue, &incoming, time_paused ? 0 : pdMS_TO_TICKS(1000)) ==
+            pdTRUE) {
             nm_processor_dispatch(agent, &incoming);
             free(incoming.body);
             TickType_t current = xTaskGetTickCount();
@@ -146,10 +167,13 @@ void nm_esp_processor_run(const nm_esp_config *config)
             nm_processor_publish_firmware_status(agent);
             next_health = now + pdMS_TO_TICKS(10000);
         }
-        if (agent->connected && !agent->updating && !pending && !nm_esp_monitor_stopped() &&
+        if (!time_paused && !agent->updating && !pending && !nm_esp_monitor_stopped() &&
             (int32_t)(now - next_poll) >= 0) {
-            nm_processor_publish_ready(agent, false);
-            bool cycle_ok = nm_esp_state_cycle(agent->state, config, agent->client);
+            if (agent->connected)
+                nm_processor_publish_ready(agent, false);
+            bool cycle_ok =
+                nm_esp_state_cycle(agent->state, config,
+                                   agent->connected && nm_network_ready() ? agent->client : NULL);
             if (!cycle_ok)
                 ESP_LOGW(TAG, "monitor cycle failed or paused");
             nm_ble_buffer_stats ble_stats = nm_ble_buffer_get_stats();
@@ -182,7 +206,7 @@ void nm_esp_processor_run(const nm_esp_config *config)
                 (unsigned)uxQueueMessagesWaiting(agent->queue),
                 atomic_load(&agent->mqtt_queue_high_water), atomic_load(&agent->mqtt_queue_drops),
                 atomic_load(&agent->mqtt_allocation_failures));
-            if (!agent->updating)
+            if (agent->connected && !agent->updating)
                 nm_processor_publish_ready(agent, true);
             next_poll = xTaskGetTickCount() + pdMS_TO_TICKS(agent->poll_seconds * 1000);
         }

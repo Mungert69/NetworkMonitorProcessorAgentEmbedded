@@ -88,6 +88,13 @@ enum { NM_F_IsLoggedInWebsite, NM_F_IsHostsAdded };
 
 typedef struct { nm_record **items; size_t count, capacity, limit; } nm_records;
 typedef struct {
+    bool present, valid, correcting, target_valid;
+    uint32_t low, high, target_low, target_high;
+    int64_t offset;
+    uint64_t remaining;
+} nm_time_state;
+typedef struct {
+    nm_time_state clock;
     nm_records hosts, infos, pings, removepings, removals, swaps;
     nm_params_record *params;
     nm_flow_record *flow;
@@ -95,6 +102,8 @@ typedef struct {
     struct nm_schedule *schedule;
     uint32_t sequence;
     bool changed;
+    /* Parent records may still be referenced by samples outside the RAM window. */
+    bool retain_infos;
 } nm_model;
 
 bool nm_record_has(const nm_record *r, unsigned field);

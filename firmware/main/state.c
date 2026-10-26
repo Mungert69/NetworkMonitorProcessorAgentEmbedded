@@ -2,12 +2,19 @@
 #include "ble_cycle.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "message_publish.h"
 #include "monitor_numbers.h"
+#include "monitor_batch.h"
 #include "monitor_schedule.h"
 #include "monitor_schedule_typed.h"
 #include "nm_esp.h"
 #include "nm_probe_pool.h"
+#include "ping_backlog.h"
+#include "network.h"
+#include "monitor_time.h"
+#include "status_led.h"
+#include "storage_checkpoint.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,11 +27,13 @@ struct nm_esp_state {
     void *yield_context;
     nm_probe_executor *executor;
     uint64_t generation; /* Owner-task configuration/reset epoch; never serialized. */
+    nm_ping_backlog *backlog;
+    bool time_started, time_done;
 };
 #define GET yyjson_mut_obj_get
 static void timestamp(char out[32])
 {
-    time_t now = time(NULL);
+    time_t now = nm_network_recording_time();
     struct tm utc;
     if (!gmtime_r(&now, &utc) || !strftime(out, 32, "%Y-%m-%dT%H:%M:%SZ", &utc))
         strcpy(out, "1970-01-01T00:00:00Z");
@@ -32,7 +41,7 @@ static void timestamp(char out[32])
 static bool save(const nm_model *model)
 {
     yyjson_mut_doc *snapshot = nm_model_encode(model);
-    bool ok = snapshot && nm_esp_storage_save("monitoring", yyjson_mut_doc_get_root(snapshot));
+    bool ok = nm_storage_checkpoint_save(snapshot);
     yyjson_mut_doc_free(snapshot);
     return ok;
 }
@@ -86,6 +95,15 @@ nm_esp_state *nm_esp_state_new(const nm_esp_config *config)
         ok = nm_schedule_configure(s->core.schedule, config->root);
     if (ok)
         ok = recoverable_parents(&s->core);
+    if (ok && nm_ping_storage_selected() != NM_PING_STORAGE_NONE) {
+        uint64_t nonce = ((uint64_t)esp_random() << 32) | esp_random();
+        s->backlog = nm_ping_backlog_open(yyjson_mut_doc_get_root(snapshot), &s->core, nonce,
+                                          config->max_pending_ping_infos);
+        ok = s->backlog != NULL;
+        if (ok)
+            ESP_LOGI(TAG, "pending PingInfos use paged %s storage",
+                     nm_ping_storage_selected() == NM_PING_STORAGE_SD ? "SD" : "NVS");
+    }
     yyjson_mut_doc_free(snapshot);
     yyjson_mut_doc_free(data);
     yyjson_mut_doc_free(hosts);
@@ -96,9 +114,75 @@ nm_esp_state *nm_esp_state_new(const nm_esp_config *config)
     }
     return s;
 }
-bool nm_esp_state_save(const nm_esp_state *s)
+bool nm_esp_state_save(nm_esp_state *s)
 {
-    return s && save(&s->core);
+    if (s && s->time_done) {
+        int64_t now = (int64_t)nm_network_recording_time() - INT64_C(1640995200);
+        if (now >= 0 && now <= UINT32_MAX)
+            nm_monitor_time_observe(&s->core.clock, (uint32_t)now);
+    }
+    return s && (s->backlog ? nm_ping_backlog_save(s->backlog, &s->core) : save(&s->core));
+}
+bool nm_esp_state_time_ready(nm_esp_state *s)
+{
+    return s && s->time_done;
+}
+bool nm_esp_state_time_step(nm_esp_state *s)
+{
+    if (!s || s->time_done)
+        return s != NULL;
+    int64_t offset;
+    if (!nm_network_correction(&offset))
+        return true;
+    nm_status_led_correcting(true);
+    if (s->core.clock.correcting) {
+        /* Recovery has priority: no new probes or sends until the persisted
+         * rewrite completes using its original offset, never this boot's one. */
+        s->time_started = true;
+        if (!s->backlog || !nm_ping_backlog_time_step(s->backlog, &s->core))
+            return false;
+    } else if (!s->time_started) {
+        /* Flush new RAM results/acks before starting the durable correction. */
+        if (!nm_esp_state_save(s))
+            return false;
+        nm_model next = {0};
+        if (!nm_model_clone(&next, &s->core))
+            return false;
+        uint64_t pages = s->backlog ? nm_ping_backlog_pages(s->backlog) : 0;
+        if (!s->core.clock.present)
+            ESP_LOGW(TAG,
+                     "No timestamp-validity metadata; treating pending readings as provisional");
+        bool ok = nm_monitor_time_begin(&next, offset, pages);
+        if (ok && !pages) {
+            int64_t date = (int64_t)time(NULL) - INT64_C(1640995200);
+            if (date >= 0 && date <= UINT32_MAX)
+                nm_monitor_time_observe(&next.clock, (uint32_t)date);
+        }
+        if (ok && s->backlog) {
+            nm_ping_backlog_time_begin(s->backlog);
+            ok = nm_ping_backlog_save(s->backlog, &next);
+        } else if (ok) {
+            yyjson_mut_doc *snapshot = nm_model_encode(&next);
+            ok = nm_storage_checkpoint_save_at(snapshot, time(NULL));
+            yyjson_mut_doc_free(snapshot);
+        }
+        if (!apply(s, &next, ok))
+            return false;
+        s->time_started = true;
+    }
+    if (!s->core.clock.correcting) {
+        /* Final root is durable before any TLS/MQTT publication is permitted. */
+        nm_network_accept_correction();
+        s->time_done = true;
+        nm_status_led_correcting(false);
+        ESP_LOGI(TAG, "Timestamp correction committed; monitoring and sending resume");
+    }
+    return true;
+}
+bool nm_esp_state_time_paused(const nm_esp_state *s)
+{
+    int64_t offset;
+    return s && !s->time_done && (s->core.clock.correcting || nm_network_correction(&offset));
 }
 void nm_esp_state_free(nm_esp_state *s)
 {
@@ -107,6 +191,7 @@ void nm_esp_state_free(nm_esp_state *s)
             s->executor->destroy(s->executor->context);
         free(s->executor);
         nm_model_close(&s->core);
+        nm_ping_backlog_free(s->backlog);
         free(s);
     }
 }
@@ -132,7 +217,9 @@ size_t nm_esp_state_monitor_count(const nm_esp_state *s)
 }
 size_t nm_esp_state_pending_ping_count(const nm_esp_state *s)
 {
-    return s ? s->core.pings.count : 0;
+    return s ? (size_t)(s->backlog ? nm_ping_backlog_pending(s->backlog, &s->core)
+                                   : s->core.pings.count)
+             : 0;
 }
 bool nm_esp_state_init(nm_esp_state *s, const nm_esp_config *config, yyjson_mut_val *request)
 {
@@ -145,6 +232,12 @@ bool nm_esp_state_init(nm_esp_state *s, const nm_esp_config *config, yyjson_mut_
     if (ok && !next.schedule->initialized)
         ok = nm_schedule_configure(next.schedule, config->root);
     ok = apply(s, &next, ok);
+    if (ok && s->backlog &&
+        (yyjson_mut_is_true(GET(request, "Reset")) ||
+         yyjson_mut_is_true(GET(request, "TotalReset")))) {
+        nm_ping_backlog_reset(s->backlog);
+        s->core.retain_infos = false;
+    }
     if (ok)
         ++s->generation;
     return ok;
@@ -166,10 +259,13 @@ bool nm_esp_state_ack(nm_esp_state *s, yyjson_mut_val *response)
     nm_model next = {0};
     if (!s || !nm_model_clone(&next, &s->core))
         return false;
-    bool ok = apply(s, &next, nm_model_ack(&next, response));
+    bool valid = nm_model_ack(&next, response);
+    if (valid && s->backlog)
+        valid = nm_ping_backlog_ack(s->backlog, &s->core, response);
+    bool ok = apply(s, &next, valid);
     if (ok)
         ESP_LOGI(TAG, "application acknowledgement applied in RAM; pending_pings=%u",
-                 (unsigned)s->core.pings.count);
+                 (unsigned)nm_esp_state_pending_ping_count(s));
     return ok;
 }
 bool nm_esp_state_user_event(nm_esp_state *s, yyjson_mut_val *event)
@@ -235,157 +331,14 @@ bool nm_esp_state_alert(nm_esp_state *s, const nm_esp_config *config,
     yyjson_mut_doc_free(doc);
     return ok;
 }
-static yyjson_mut_doc *wire_data(const nm_esp_config *config, const nm_model *model)
-{
-    yyjson_mut_doc *doc = nm_json_new();
-    if (!doc)
-        return NULL;
-    yyjson_mut_val *obj = yyjson_mut_obj(doc);
-    yyjson_mut_doc_set_root(doc, obj);
-    const char *arrays[] = {"MonitorPingInfos",     "PingInfos",
-                            "MonitorStatusAlerts",  "RemoveMonitorPingInfoIDs",
-                            "SwapMonitorPingInfos", "RemovePingInfos"};
-    bool ok = yyjson_mut_obj_add_strcpy(doc, obj, "AppID", config->app_id) &&
-              yyjson_mut_obj_add_strcpy(doc, obj, "AuthKey", config->auth_key) &&
-              yyjson_mut_obj_add_uint(doc, obj, "PiIDKey", model->sequence);
-    for (size_t i = 0; i < sizeof(arrays) / sizeof(arrays[0]); ++i)
-        ok = ok && add(doc, obj, arrays[i], yyjson_mut_arr(doc));
-    if (!ok) {
-        yyjson_mut_doc_free(doc);
-        return NULL;
-    }
-    return doc;
-}
 /* Every bounded batch includes its parent info, including disabled hosts. All
  * fields are retained, and broker PUBACK never removes an application sample. */
 static bool publication_continue(nm_esp_state *s, uint64_t generation)
 {
-    return (!s->yield || s->yield(s->yield_context)) && generation == s->generation;
+    return (!s->yield || s->yield(s->yield_context)) && generation == s->generation &&
+           nm_network_ready();
 }
 
-static yyjson_mut_doc *pending_batch(const nm_esp_config *config, const nm_model *model)
-{
-    yyjson_mut_doc *doc = wire_data(config, model);
-    if (!doc)
-        return NULL;
-    yyjson_mut_val *obj = yyjson_mut_doc_get_root(doc);
-    bool built = true;
-    for (size_t a = 0; a < model->removals.count; ++a)
-        built =
-            built && yyjson_mut_arr_append(
-                         GET(obj, "RemoveMonitorPingInfoIDs"),
-                         yyjson_mut_sint(doc, ((nm_swap_record *)model->removals.items[a])->ID));
-    for (size_t a = 0; a < model->swaps.count; ++a)
-        built = built && yyjson_mut_arr_append(GET(obj, "SwapMonitorPingInfos"),
-                                               nm_record_encode(doc, model->swaps.items[a]));
-    if (!built) {
-        yyjson_mut_doc_free(doc);
-        return NULL;
-    }
-    return doc;
-}
-
-/* Adds one monitor and up to 64 of its pending samples. cursor is committed
- * only after successful construction; the caller may roll back the arrays and
- * retry the chunk in a fresh batch when the encoded wire limit is reached. */
-static bool append_pending_chunk(yyjson_mut_doc *doc, const nm_model *model,
-                                 const nm_monitor_record *info, size_t *cursor, size_t *added,
-                                 size_t max_pings)
-{
-    yyjson_mut_val *obj = yyjson_mut_doc_get_root(doc);
-    yyjson_mut_val *infos = GET(obj, "MonitorPingInfos"), *pings = GET(obj, "PingInfos");
-    if (!yyjson_mut_arr_append(infos, nm_record_encode(doc, &info->base)))
-        return false;
-    size_t next = *cursor;
-    *added = 0;
-    for (; next < model->pings.count && *added < max_pings; ++next) {
-        const nm_ping_record *ping = (nm_ping_record *)model->pings.items[next];
-        if (ping->MonitorPingInfoID != info->MonitorIPID)
-            continue;
-        if (!yyjson_mut_arr_append(pings, nm_record_encode(doc, &ping->base)))
-            return false;
-        ++*added;
-    }
-    *cursor = next;
-    return true;
-}
-
-static bool send_pending_batch(yyjson_mut_doc *doc, const nm_esp_config *config,
-                               esp_mqtt_client_handle_t client)
-{
-    return nm_esp_publish_event(config, client, "processor/out/data", yyjson_mut_doc_get_root(doc),
-                                NM_MESSAGE_BROTLI_TUPLE, "ProcessorDataObj");
-}
-
-static bool publish_pending(nm_esp_state *s, const nm_model *model, uint64_t generation,
-                            const nm_esp_config *config, esp_mqtt_client_handle_t client)
-{
-    yyjson_mut_doc *doc = pending_batch(config, model);
-    if (!doc)
-        return false;
-    bool ok = true;
-    size_t batch_chunks = 0;
-    size_t count = model->infos.count;
-    for (size_t h = 0; h < (count ? count : 1); ++h) {
-        const nm_monitor_record *info =
-            h < count ? (nm_monitor_record *)model->infos.items[h] : NULL;
-        size_t cursor = 0;
-        size_t max_pings = 64;
-        do {
-            if (!publication_continue(s, generation)) {
-                ok = false;
-                goto done;
-            }
-            if (!info)
-                break;
-            size_t original_cursor = cursor, added = 0;
-            bool built = append_pending_chunk(doc, model, info, &cursor, &added, max_pings);
-            if (!built) {
-                ok = false;
-                goto done;
-            }
-            yyjson_mut_val *obj = yyjson_mut_doc_get_root(doc);
-            size_t wire_size =
-                nm_esp_event_wire_size(config, obj, NM_MESSAGE_BROTLI_TUPLE, "ProcessorDataObj");
-            if (!wire_size || wire_size > NM_ESP_MAX_PUBLICATION) {
-                yyjson_mut_arr_remove_last(GET(obj, "MonitorPingInfos"));
-                for (size_t i = 0; i < added; ++i)
-                    yyjson_mut_arr_remove_last(GET(obj, "PingInfos"));
-                if (!batch_chunks) {
-                    if (added <= 1 || max_pings == 1) {
-                        ok = false; /* One complete sample/parent is too large. */
-                        goto done;
-                    }
-                    max_pings /= 2;
-                    cursor = original_cursor;
-                    continue;
-                }
-                if (!send_pending_batch(doc, config, client)) {
-                    ok = false;
-                    goto done;
-                }
-                yyjson_mut_doc_free(doc);
-                doc = pending_batch(config, model);
-                if (!doc) {
-                    ok = false;
-                    goto done;
-                }
-                batch_chunks = 0;
-                cursor = original_cursor;
-                continue;
-            }
-            ++batch_chunks;
-            max_pings = 64;
-        } while (cursor < model->pings.count);
-    }
-    if (publication_continue(s, generation))
-        ok = send_pending_batch(doc, config, client) && ok;
-    else
-        ok = false;
-done:
-    yyjson_mut_doc_free(doc);
-    return ok;
-}
 static bool publish_alerts(nm_esp_state *s, const nm_model *model, uint64_t generation,
                            const nm_esp_config *config, esp_mqtt_client_handle_t client)
 {
@@ -398,7 +351,7 @@ static bool publish_alerts(nm_esp_state *s, const nm_model *model, uint64_t gene
         if (!status || !nm_record_has(&status->base, NM_S_IsUp) ||
             nm_record_null(&status->base, NM_S_IsUp))
             continue;
-        yyjson_mut_doc *doc = wire_data(config, model);
+        yyjson_mut_doc *doc = nm_monitor_batch_payload(config, model);
         if (!doc)
             return false;
         yyjson_mut_val *obj = yyjson_mut_doc_get_root(doc),
@@ -422,6 +375,15 @@ static bool publish_alerts(nm_esp_state *s, const nm_model *model, uint64_t gene
     }
     return ok;
 }
+typedef struct {
+    nm_esp_state *state;
+    uint64_t generation;
+} publication_cursor;
+static bool continue_batch(void *context)
+{
+    publication_cursor *cursor = context;
+    return publication_continue(cursor->state, cursor->generation);
+}
 /* Commands may replace the live model between messages. Keep an owned COW
  * snapshot, never a borrowed pointer into s->core across a yield. A reset or
  * configuration update cancels the old publication; acknowledgements remain
@@ -429,12 +391,17 @@ static bool publish_alerts(nm_esp_state *s, const nm_model *model, uint64_t gene
 static bool publish_all(nm_esp_state *s, const nm_esp_config *config,
                         esp_mqtt_client_handle_t client)
 {
+    if (!client || !nm_network_ready())
+        return true; /* Offline cycles still save readings and scheduler state. */
     nm_model snapshot = {0};
     if (!nm_model_clone(&snapshot, &s->core))
         return false;
+    if (s->backlog)
+        nm_ping_backlog_delivery_view(s->backlog, &snapshot);
     uint64_t generation = s->generation;
     bool alerts = publish_alerts(s, &snapshot, generation, config, client);
-    bool data = publish_pending(s, &snapshot, generation, config, client);
+    publication_cursor cursor = {.state = s, .generation = generation};
+    bool data = nm_monitor_batch_send(config, client, &snapshot, continue_batch, &cursor);
     bool current = publication_continue(s, generation);
     nm_model_close(&snapshot);
     return alerts && data && current;
@@ -501,7 +468,7 @@ static bool drain_probe(nm_esp_state *s, bool *cycle_ok)
     if (nm_model_host(&next, reply.monitor_id) && info) {
         char when[32];
         timestamp(when);
-        uint32_t date = (uint32_t)((uint64_t)time(NULL) - UINT64_C(1640995200));
+        uint32_t date = (uint32_t)((uint64_t)nm_network_recording_time() - UINT64_C(1640995200));
         uint16_t rtt = nm_esp_result_sample(info->EndPointType, &reply.result);
         ESP_LOGI(TAG, "probe id=%ld ok=%d elapsed_ms=%u", (long)reply.monitor_id, reply.result.ok,
                  reply.result.elapsed_ms);
@@ -542,7 +509,7 @@ static bool run_sequential(nm_esp_state *s, const nm_esp_config *config)
         if (s->yield && !s->yield(s->yield_context))
             break;
         size_t pending = s->core.pings.count;
-        if (pending >= config->max_pending_ping_infos) {
+        if (pending >= (s->backlog ? s->core.pings.limit : config->max_pending_ping_infos)) {
             ESP_LOGW(TAG,
                      "pending pings=%u limit=%u; probes paused until application acknowledgement",
                      (unsigned)pending, config->max_pending_ping_infos);
@@ -560,12 +527,13 @@ static bool run_sequential(nm_esp_state *s, const nm_esp_config *config)
         }
         const char *type = info->EndPointType;
         bool include = false;
-        valid = nm_schedule_include(next.schedule, info, (int64_t)time(NULL), schedule_random, NULL,
-                                    nm_schedule_daily_hash(id), &include);
+        valid = nm_schedule_include(next.schedule, info, (int64_t)nm_network_recording_time(),
+                                    schedule_random, NULL, nm_schedule_daily_hash(id), &include);
         if (valid && include && host && nm_esp_endpoint_supported(type)) {
             char when[32];
             timestamp(when);
-            uint32_t date = (uint32_t)((uint64_t)time(NULL) - UINT64_C(1640995200));
+            uint32_t date =
+                (uint32_t)((uint64_t)nm_network_recording_time() - UINT64_C(1640995200));
             nm_esp_result result = nm_esp_endpoint_run(info);
             if (result.disposition == NM_PROBE_LOCAL_FAILURE) {
                 ESP_LOGW(TAG, "probe id=%ld inconclusive: %s; pausing until next cycle", (long)id,
@@ -630,7 +598,8 @@ static bool run_concurrent(nm_esp_state *s, const nm_esp_config *config)
         }
         if (!valid || !dispatch || generation != s->generation)
             break;
-        if (s->core.pings.count + (size_t)outstanding >= config->max_pending_ping_infos) {
+        if (s->core.pings.count + (size_t)outstanding >=
+            (s->backlog ? s->core.pings.limit : config->max_pending_ping_infos)) {
             ESP_LOGW(TAG,
                      "pending pings=%u limit=%u; probes paused until application acknowledgement",
                      (unsigned)(s->core.pings.count + (size_t)outstanding),
@@ -648,8 +617,8 @@ static bool run_concurrent(nm_esp_state *s, const nm_esp_config *config)
             continue;
         }
         bool include = false;
-        valid = nm_schedule_include(next.schedule, info, (int64_t)time(NULL), schedule_random, NULL,
-                                    nm_schedule_daily_hash(id), &include);
+        valid = nm_schedule_include(next.schedule, info, (int64_t)nm_network_recording_time(),
+                                    schedule_random, NULL, nm_schedule_daily_hash(id), &include);
         bool probe = valid && include && host && nm_esp_endpoint_supported(info->EndPointType);
         /* Apply the schedule advance before draining: otherwise this candidate
          * could overwrite a drained result in the active RAM model. */
@@ -674,22 +643,51 @@ static bool run_concurrent(nm_esp_state *s, const nm_esp_config *config)
     free(plan);
     return valid;
 }
+static void log_backlog(nm_esp_state *s, bool storage_ready)
+{
+    if (!s->backlog)
+        return;
+    nm_ping_backlog_stats stats =
+        nm_ping_backlog_status(s->backlog, &s->core, (uint64_t)esp_timer_get_time() / 1000000);
+    stats.paused = stats.paused || !storage_ready;
+    if (stats.estimate_known)
+        ESP_LOGI(TAG,
+                 "backlog store=%s pending=%llu free_bytes=%llu reserve_bytes=%llu "
+                 "paused=%d estimated_seconds_until_full=%llu",
+                 stats.mode == NM_PING_STORAGE_SD ? "sd" : "nvs", (unsigned long long)stats.pending,
+                 (unsigned long long)stats.free_bytes, (unsigned long long)stats.reserve_bytes,
+                 stats.paused, (unsigned long long)stats.estimated_seconds);
+    else
+        ESP_LOGI(TAG,
+                 "backlog store=%s pending=%llu free_bytes=%llu reserve_bytes=%llu "
+                 "paused=%d estimated_seconds_until_full=unknown",
+                 stats.mode == NM_PING_STORAGE_SD ? "sd" : "nvs", (unsigned long long)stats.pending,
+                 (unsigned long long)stats.free_bytes, (unsigned long long)stats.reserve_bytes,
+                 stats.paused);
+}
+
 bool nm_esp_state_cycle(nm_esp_state *s, const nm_esp_config *config,
                         esp_mqtt_client_handle_t client)
 {
-    if (!s || time(NULL) < 1640995200)
+    if (!s || nm_esp_state_time_paused(s) || nm_network_recording_time() < 1640995200)
         return false;
+    bool storage_ready = !s->backlog || (nm_ping_backlog_load(s->backlog, &s->core) &&
+                                         nm_ping_backlog_room(s->backlog, config->max_monitors) &&
+                                         nm_ping_backlog_sequence_safe(s->backlog, s->core.sequence,
+                                                                       config->max_monitors));
     nm_model next = {0};
     char when[32];
     timestamp(when);
     bool valid = nm_model_clone(&next, &s->core) && next.hosts.count <= config->max_monitors &&
                  nm_model_reconcile(&next, config->app_id, when);
-    valid = valid && nm_schedule_prepare(next.schedule, &next.infos, (int64_t)time(NULL));
+    valid = valid &&
+            nm_schedule_prepare(next.schedule, &next.infos, (int64_t)nm_network_recording_time());
     bool prepared = apply(s, &next, valid);
     bool ble_prepared = nm_ble_cycle_begin(&s->core.infos);
     if (!ble_prepared)
         ESP_LOGE(TAG, "unable to configure BLE history retention");
-    bool probes = prepared && (s->executor ? run_concurrent(s, config) : run_sequential(s, config));
+    bool probes = prepared && storage_ready &&
+                  (s->executor ? run_concurrent(s, config) : run_sequential(s, config));
     /* Delivery has priority over persistence. Never short-circuit either attempt.
      * Publication-time acknowledgements update RAM before the snapshot. */
     bool dated = refresh_publication_dates(s);
@@ -700,6 +698,7 @@ bool nm_esp_state_cycle(nm_esp_state *s, const nm_esp_config *config,
     bool saved = nm_esp_state_save(s);
     if (!saved)
         ESP_LOGE(TAG, "cycle snapshot save failed; monitoring state retained in RAM");
+    log_backlog(s, storage_ready);
     bool ble_saved = nm_ble_cycle_complete();
     if (!ble_saved)
         ESP_LOGE(TAG, "BLE snapshot allocation failed; history retained");

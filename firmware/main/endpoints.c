@@ -1,4 +1,5 @@
 #include "endpoint_internal.h"
+#include "status_led.h"
 #include <string.h>
 
 bool nm_esp_endpoint_supported(const char *type)
@@ -21,6 +22,7 @@ nm_esp_result nm_esp_endpoint_run(const nm_monitor_record *monitor)
         return invalid;
     if (monitor->Timeout < 0)
         return invalid;
+    nm_status_led_probe();
     if (!strcmp(type, "blebroadcast") || !strcmp(type, "blebroadcastlisten")) {
         /* BLE owns its lookback default; raw listen ignores the window. */
         return nm_endpoint_check_ble(monitor, nm_ble_endpoint_window_ms(monitor->Timeout));
