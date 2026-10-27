@@ -2,10 +2,11 @@
 #include "nm_memory.h"
 #include <strings.h>
 
-static const char *const types[] = {"QuantumCert", "QuantumConnect", "QuantumPortScanner",
-                                    "QuantumInfo", "Openssl",        "Nmap"};
-static const char *const names[] = {"quantum-cert", "quantum", "quantum-scan",
-                                    "quantuminfo",  "openssl", "nmap"};
+static const char *const types[] = {"QuantumCert",  "QuantumConnect", "QuantumPortScanner",
+                                    "QuantumInfo",  "Openssl",        "Nmap",
+                                    "CameraCapture"};
+static const char *const names[] = {"quantum-cert", "quantum", "quantum-scan", "quantuminfo",
+                                    "openssl",      "nmap",    "cameracapture"};
 const char *nm_cmd_kind_type(nm_cmd_kind kind)
 {
     return kind < NM_CMD_COUNT && kind >= 0 ? types[kind] : NULL;
@@ -40,6 +41,8 @@ const char *nm_cmd_kind_help(nm_cmd_kind kind)
         return nm_openssl_cmd_help();
     case NM_CMD_NMAP:
         return nm_nmap_cmd_help();
+    case NM_CMD_CAMERA:
+        return nm_camera_cmd_help();
     default:
         return "Unknown command processor";
     }
@@ -78,6 +81,11 @@ bool nm_cmd_kind_parse(nm_cmd_kind kind, const char *arguments, unsigned timeout
             return false;
         limit_timeout(&request->data.openssl.timeout_ms, timeout_ms);
         break;
+    case NM_CMD_CAMERA:
+        if (!nm_camera_cmd_parse(arguments, &request->data.camera, error))
+            return false;
+        request->data.camera.timeout_ms = timeout_ms;
+        break;
     case NM_CMD_NMAP:
         if (!nm_nmap_cmd_parse(arguments, &request->data.nmap, error))
             return false;
@@ -103,6 +111,8 @@ nm_cmd_result nm_cmd_kind_run(const nm_embedded_command *request, const atomic_b
         return nm_quantum_info_cmd_run(&request->data.info, cancellation);
     case NM_CMD_OPENSSL:
         return nm_openssl_cmd_run(&request->data.openssl, cancellation);
+    case NM_CMD_CAMERA:
+        return nm_camera_cmd_run(&request->data.camera, cancellation);
     case NM_CMD_NMAP:
         return nm_nmap_cmd_run(&request->data.nmap, cancellation);
     default:

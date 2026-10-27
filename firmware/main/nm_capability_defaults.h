@@ -7,5 +7,5 @@
 #else
 #define NM_DISABLED_ENDPOINTS_JSON "[\"httpfull\",\"sitehash\",\"configintegrity\",\"smtp\",\"blebroadcast\",\"blebroadcastlisten\",\"nmapvuln\",\"crawlsite\",\"dailycrawl\",\"dailyhugkeepalive\",\"hugwake\"]"
 #endif
-#define NM_DISABLED_COMMANDS_JSON "[\"meta\",\"metalive\",\"busybox\",\"searchweb\",\"searchengage\",\"crawlpage\",\"crawlsite\",\"hugspacewake\",\"hugspacekeepalive\",\"ping\",\"blebroadcast\",\"blebroadcastlisten\",\"cameracapture\",\"msfconsole\"]"
+#define NM_DISABLED_COMMANDS_JSON "[\"meta\",\"metalive\",\"busybox\",\"searchweb\",\"searchengage\",\"crawlpage\",\"crawlsite\",\"hugspacewake\",\"hugspacekeepalive\",\"ping\",\"blebroadcast\",\"blebroadcastlisten\",\"msfconsole\"]"
 #endif

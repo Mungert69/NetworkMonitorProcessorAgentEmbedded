@@ -1,5 +1,6 @@
 #include "cmd_processor_message.h"
 #include <limits.h>
+#include "mbedtls/base64.h"
 #include <stdio.h>
 
 bool nm_cmd_message_output(yyjson_mut_doc *doc, const char *output, bool success, bool ack)
@@ -122,4 +123,26 @@ fail:
     free(copy);
     free(formatted);
     return false;
+}
+
+bool nm_cmd_message_raw(yyjson_mut_doc *doc, const nm_cmd_result *result)
+{
+    yyjson_mut_val *root = yyjson_mut_doc_get_root(doc);
+    bool image = result->success && result->raw_data && result->raw_length;
+    if (result->raw_length > NM_CMD_RAW_MAX || (image && strlen(result->raw_sha256) != 64))
+        return false;
+    size_t size = image ? 4 * ((result->raw_length + 2) / 3) : 0, written = 0;
+    char *encoded = nm_bulk_calloc(size + 1, 1);
+    if (!encoded)
+        return false;
+    bool ok = !image || !mbedtls_base64_encode((uint8_t *)encoded, size + 1, &written,
+                                               result->raw_data, result->raw_length);
+    ok = ok && nm_json_put_str(doc, root, "RawData", encoded) &&
+         nm_json_put_str(doc, root, "RawDataMimeType", image ? "image/jpeg" : "") &&
+         nm_json_put_str(doc, root, "RawDataEncoding", image ? "base64" : "") &&
+         nm_json_put(doc, root, "RawDataLength",
+                     yyjson_mut_uint(doc, image ? result->raw_length : 0)) &&
+         nm_json_put_str(doc, root, "RawDataSha256", image ? result->raw_sha256 : "");
+    free(encoded);
+    return ok;
 }

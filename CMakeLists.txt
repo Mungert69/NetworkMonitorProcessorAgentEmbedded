@@ -221,11 +221,11 @@ add_executable(test_quantum_cert_cmd tests/native/test_quantum_cert_cmd.c
     firmware/main/quantum_port_scanner_cmd_processor.c firmware/main/quantum_info_cmd_processor.c
     firmware/main/openssl_cmd_processor.c firmware/main/openssl_arguments.c
     firmware/main/nmap_cmd_processor.c firmware/main/nmap_targets.c
-    firmware/main/processor_cmd.c)
+    firmware/main/processor_cmd.c firmware/main/camera_capture_cmd_processor.c)
 target_include_directories(test_quantum_cert_cmd PRIVATE tests/native/cmd_stubs tests/stubs firmware/main)
 target_compile_definitions(test_quantum_cert_cmd PRIVATE _POSIX_C_SOURCE=200809L)
 target_compile_options(test_quantum_cert_cmd PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
-target_link_libraries(test_quantum_cert_cmd PRIVATE yyjson Threads::Threads)
+target_link_libraries(test_quantum_cert_cmd PRIVATE yyjson Threads::Threads OpenSSL::Crypto)
 add_test(NAME native-quantum_cert_cmd COMMAND test_quantum_cert_cmd)
 set_tests_properties(native-quantum_cert_cmd PROPERTIES TIMEOUT 15)
 add_executable(test_openssl_adapter tests/native/test_openssl_adapter.c
@@ -289,3 +289,17 @@ target_include_directories(test_monitor_time PRIVATE firmware/main)
 target_compile_options(test_monitor_time PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 target_link_libraries(test_monitor_time PRIVATE yyjson m)
 add_test(NAME native-monitor_time COMMAND test_monitor_time)
+
+add_executable(test_camera_capture tests/native/test_camera_capture.c
+    firmware/main/camera_capture.c firmware/main/camera_capture_cmd_processor.c
+    firmware/main/camera_xml.c firmware/main/cmd_arguments.c firmware/main/cmd_processor_message.c)
+target_include_directories(test_camera_capture PRIVATE tests/stubs firmware/main)
+target_compile_definitions(test_camera_capture PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_options(test_camera_capture PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+target_link_libraries(test_camera_capture PRIVATE yyjson OpenSSL::Crypto)
+add_test(NAME native-camera_capture COMMAND test_camera_capture)
+
+add_executable(test_camera_jpeg tests/native/test_camera_jpeg.c firmware/main/camera_jpeg.c)
+target_include_directories(test_camera_jpeg PRIVATE firmware/main)
+target_compile_options(test_camera_jpeg PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+add_test(NAME native-camera_jpeg COMMAND test_camera_jpeg ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/camera/synthetic.jpg)

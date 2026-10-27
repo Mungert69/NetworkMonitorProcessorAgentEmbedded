@@ -28,10 +28,12 @@ this image and the same setup procedure.
 ## Monitoring support
 
 This embedded processor supports ICMP ping, DNS, TCP connection, HTTP/HTTPS,
-and passive Bluetooth LE broadcast monitoring. It does not currently support
-command-running processors or every endpoint available in the Windows and
-Docker agents. BLE monitoring requires the ESP32 board to be within radio range
-of the broadcasting device.
+and passive Bluetooth LE broadcast monitoring. Seven bounded command processors
+are implemented, including native JPEG CameraCapture in version 0.5.1. See the
+[command implementation notes](docs/command-processor-port-notes.md) for supported
+arguments, limits and differences from the .NET agent. Other endpoints and full
+command parity remain out of scope. BLE monitoring requires the ESP32 board to
+be within radio range of the broadcasting device.
 
 The current firmware also includes quantum key-exchange and quantum-certificate
 probes. The documented Live first-install package is published separately from

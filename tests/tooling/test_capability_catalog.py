@@ -45,7 +45,7 @@ class CapabilityCatalogTests(unittest.TestCase):
         provider = (LIB / "Objects/Connection/CommandProcessors/CmdProcessorProvider.cs").read_text()
         core = provider.split("_coreProcessorTypes = new()", 1)[1].split("};", 1)[0]
         commands = {x.lower() for x in re.findall(r'"([^"]+)"', core)}
-        self.assertFalse(commands - {"quantumcert", "quantumconnect", "quantumportscanner", "quantuminfo", "openssl", "nmap"} - set(defaults["NM_DISABLED_COMMANDS_JSON"]))
+        self.assertFalse(commands - {"quantumcert", "quantumconnect", "quantumportscanner", "quantuminfo", "openssl", "nmap", "cameracapture"} - set(defaults["NM_DISABLED_COMMANDS_JSON"]))
         self.assertNotIn("quantumcert", defaults["NM_DISABLED_COMMANDS_JSON"])
         self.assertNotIn("quantum-cert", defaults["NM_DISABLED_COMMANDS_JSON"])
 

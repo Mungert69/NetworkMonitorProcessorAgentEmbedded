@@ -65,6 +65,7 @@ static void release(struct nm_cmd_job *job)
         vTaskDeleteWithCaps(job->task);
     yyjson_mut_doc_free(job->response);
     free(job->result.output);
+    free(job->result.raw_data);
     free(job);
 }
 
@@ -94,15 +95,35 @@ void nm_processor_cmd_poll(processor *agent)
                                      ? (unsigned)yyjson_mut_get_uint(limit)
                                      : 100;
         yyjson_mut_doc *formatted = nm_json_clone(yyjson_mut_doc_get_root(job->response));
-        job->formatted =
-            formatted && nm_cmd_message_format(formatted,
+        job->formatted = formatted &&
+                         nm_cmd_message_format(formatted,
                                                job->result.output
                                                    ? job->result.output
                                                    : "Command failed: local allocation unavailable",
-                                               job->result.success, default_limit);
+                                               job->result.success, default_limit) &&
+                         nm_cmd_message_raw(formatted, &job->result);
         if (!job->formatted) {
             yyjson_mut_doc_free(formatted);
             return;
+        }
+        if (job->result.raw_length) {
+            size_t bytes = nm_esp_event_wire_size(agent->config, yyjson_mut_doc_get_root(formatted),
+                                                  NM_MESSAGE_JSON, "ProcessorScanDataObj");
+            if (!bytes) {
+                yyjson_mut_doc_free(formatted);
+                job->formatted = false;
+                return;
+            }
+            if (bytes > NM_ESP_MAX_PUBLICATION) {
+                yyjson_mut_doc_free(formatted);
+                free(job->result.raw_data);
+                free(job->result.output);
+                job->result = (nm_cmd_result){
+                    .output = nm_bulk_strdup("Camera capture failed: image and command metadata "
+                                             "exceed the MQTT reply limit")};
+                job->formatted = false;
+                return;
+            }
         }
         yyjson_mut_doc_free(job->response);
         job->response = formatted;
@@ -146,7 +167,7 @@ bool nm_processor_cmd_dispatch(processor *agent, const char *operation, yyjson_m
                  publish(agent, response, false);
         goto done;
     }
-    if (!prepare_ack(response))
+    if (!nm_cmd_message_raw(response, &(nm_cmd_result){0}) || !prepare_ack(response))
         goto done;
     bool ack = publish(agent, response, true);
     if (!strcmp(operation, "cancelCommand")) {

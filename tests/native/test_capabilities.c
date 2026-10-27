@@ -22,7 +22,7 @@ int main(void) {
     CHECK(!contains(endpoints,"quantumcert"));
     CHECK(contains(endpoints,"configintegrity"));
     CHECK(contains(yyjson_mut_obj_get(data,"DisabledCommands"),"ping"));
-    const char *commands[]={"nmap","openssl","quantumcert","quantumconnect","quantumportscanner","quantuminfo"};
+    const char *commands[]={"nmap","openssl","quantumcert","quantumconnect","quantumportscanner","quantuminfo","cameracapture"};
     for (unsigned i=0;i<sizeof(commands)/sizeof(*commands);++i)
         CHECK(!contains(yyjson_mut_obj_get(data,"DisabledCommands"),commands[i]));
     yyjson_mut_doc_free(doc);

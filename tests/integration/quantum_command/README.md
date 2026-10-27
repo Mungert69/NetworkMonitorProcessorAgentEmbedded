@@ -7,7 +7,7 @@ against a production device or live broker. No database writes are used.
 1. Build signed normal firmware with `./tools/build-firmware.sh` and update the
    board using the documented app-only recovery procedure. Preserve bootloader,
    enrollment/config and monitoring partitions.
-2. Enable the six implemented command types in the test board's configuration
+2. Enable the required implemented command types in the test board's configuration
    (remove their previous explicit restrictions if present). Re-register to
    advertise updated capabilities. Do not override an intentional restriction.
 3. Ensure the issued OAuth token has both scan publication scopes from

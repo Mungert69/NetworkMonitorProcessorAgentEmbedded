@@ -19,6 +19,15 @@ struct cmd_test_task {
     void (*run)(void *);
     void *argument;
 };
+nm_cmd_result nm_camera_capture(const nm_camera_command *request, const atomic_bool *cancel)
+{
+    (void)request; (void)cancel;
+    nm_cmd_result result = {.success = true, .output = nm_bulk_strdup("camera snapshot"),
+                            .raw_data = nm_bulk_malloc(3), .raw_length = 3};
+    memcpy(result.raw_data, "jpg", 3);
+    memset(result.raw_sha256, 'a', 64);
+    return result;
+}
 static atomic_bool block_probe, started;
 static unsigned executions, publications, ack_count, result_count;
 static int64_t monotonic_ms;
@@ -130,6 +139,15 @@ nm_nmap_run_result nm_nmap_runner_discover(const nm_nmap_discovery_request *requ
                                 .exit_code = 0,
                                 .standard_output =
                                     nm_bulk_strdup("Nmap scan report\nHost is up\n")};
+}
+size_t nm_esp_event_wire_size(const nm_esp_config *config, yyjson_mut_val *payload,
+                              nm_message_encoding encoding, const char *type)
+{
+    (void)config; (void)encoding; (void)type;
+    size_t length = 0;
+    char *json = nm_json_write(payload, 0, &length);
+    free(json);
+    return length + 512;
 }
 bool nm_esp_publish_event(const nm_esp_config *config, esp_mqtt_client_handle_t client,
                           const char *topic, yyjson_mut_val *payload, nm_message_encoding encoding,
@@ -454,7 +472,7 @@ int main(void)
                                   "--target example.com --ports 443",
                                   "--algorithm mlkem768",
                                   "version",
-                                  "-p 443 example.com"};
+                                  "-p 443 example.com", "--address example.com --protocol onvif"};
     for (unsigned i = 0; i < NM_CMD_COUNT; ++i) {
         char id[32];
         snprintf(id, sizeof(id), "all-command-%u", i);

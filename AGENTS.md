@@ -71,7 +71,9 @@ Within `firmware/main/`, put work in the following places:
 | `processor.c` | Runtime loop and scheduling orchestration |
 | `processor_cmd.c`, `cmd_processor_message.*` | Single bounded command worker/replies and .NET output codec |
 | `cmd_processor_catalog.*`, `cmd_arguments.*`, `cmd_output.*` | Fixed typed dispatch, bounded CLI parsing and owned PSRAM reports; no MQTT/provider coupling |
-| `quantum_*_cmd_processor.*`, `openssl_cmd_processor.*`, `nmap_cmd_processor.*` | Six individual command policies; keep provider I/O behind typed runners |
+| `quantum_*_cmd_processor.*`, `openssl_cmd_processor.*`, `nmap_cmd_processor.*` | Individual command policies; keep provider I/O behind typed runners |
+| `camera_capture_cmd_processor.*`, `camera_capture.*`, `camera_xml.*` | Bounded camera policy, ONVIF discovery and XML handling |
+| `camera_http.*`, `camera_rtsp.*`, `camera_socket.*`, `camera_jpeg.*` | Verified HTTP snapshots and authenticated TCP RTSP/RTP JPEG capture; no H264/H265 decoder |
 | `openssl_runner.*`, `nmap_runner*`, `tls_inspection.*` | Process-like TLS/TCP adapters, OpenSSL group naming and structured observations; no shell execution |
 | `openssl_arguments.c` | Bounded OpenSSL CLI parsing; see the API/CLI subset in `docs/openssl-adapter.md` |
 | `service_hints.*`, `service-hints.csv` | Read-only IANA TCP service labels; refresh the sorted data with `tools/update-service-hints.py` |

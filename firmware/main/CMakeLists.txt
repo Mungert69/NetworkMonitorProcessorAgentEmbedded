@@ -8,6 +8,7 @@ idf_component_register(
         "processor.c" "processor_mqtt.c" "processor_commands.c"
         "processor_cmd.c" "cmd_processor_message.c" "quantum_cert_cmd_processor.c"
         "quantum_connect_cmd_processor.c" "cmd_arguments.c"
+        "camera_capture_cmd_processor.c" "camera_capture.c" "camera_xml.c" "camera_http.c" "camera_rtsp.c" "camera_socket.c" "camera_jpeg.c"
         "cmd_processor_catalog.c" "cmd_output.c" "quantum_port_scanner_cmd_processor.c"
         "quantum_info_cmd_processor.c" "openssl_cmd_processor.c" "openssl_arguments.c" "nmap_cmd_processor.c"
         "processor_messages.c" "processor_ota.c" "message_publish.c" "command_security.c" "command_mldsa.c"

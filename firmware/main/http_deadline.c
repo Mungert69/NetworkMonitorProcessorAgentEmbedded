@@ -32,7 +32,8 @@ struct nm_http_deadline {
     esp_http_client_handle_t client;
     char *hostname; /* TLS verification AND SNI use original host, never its IP. */
     bool resource_failed;
-    bool check_expiry;
+    bool check_expiry, stopped;
+    const atomic_bool *cancel;
 };
 
 bool nm_http_deadline_resource_failed(const nm_http_deadline *deadline)
@@ -114,13 +115,14 @@ static void capture_resource_failure(nm_http_deadline *deadline)
 
 bool nm_http_deadline_expired(nm_http_deadline *deadline)
 {
-    return esp_timer_get_time() >= deadline->deadline_us;
+    return deadline->stopped || (deadline->cancel && atomic_load(deadline->cancel)) ||
+           esp_timer_get_time() >= deadline->deadline_us;
 }
 
 static int budget(nm_http_deadline *deadline, int requested)
 {
     int64_t us = deadline->deadline_us - esp_timer_get_time();
-    if (us <= 0) {
+    if (us <= 0 || deadline->stopped || (deadline->cancel && atomic_load(deadline->cancel))) {
         errno = ETIMEDOUT;
         return 0;
     }
@@ -129,6 +131,8 @@ static int budget(nm_http_deadline *deadline, int requested)
         ms = INT_MAX;
     if (requested > 0 && ms > requested)
         ms = requested;
+    if (deadline->cancel && ms > 1000)
+        ms = 1000;
     return (int)ms;
 }
 
@@ -316,4 +320,14 @@ void nm_http_deadline_free(nm_http_deadline *deadline)
         return;
     esp_transport_destroy(deadline->transport);
     free(deadline);
+}
+
+void nm_http_deadline_cancel(nm_http_deadline *deadline, const atomic_bool *cancel)
+{
+    deadline->cancel = cancel;
+}
+
+void nm_http_deadline_stop(nm_http_deadline *deadline)
+{
+    deadline->stopped = true;
 }

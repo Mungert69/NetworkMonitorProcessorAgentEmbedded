@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdatomic.h>
 
 /* Resolver transfers an owned addrinfo list on success. It must bound its wait
  * and keep any late DNS callback's lifetime independent of this request. */
@@ -15,6 +16,10 @@ esp_transport_handle_t nm_http_deadline_transport(nm_http_deadline *);
 /* Configure before connecting. HTTPS probe policy uses midnight UTC + 7 days;
  * default off for ordinary HTTP and other users of this transport. */
 void nm_http_deadline_check_certificate_expiry(nm_http_deadline *, bool enabled);
+/* Optional borrowed cancellation flag; must outlive the request. */
+/* Owner-task stop (e.g. a bounded body collector); never frees transport. */
+void nm_http_deadline_stop(nm_http_deadline *);
+void nm_http_deadline_cancel(nm_http_deadline *, const atomic_bool *);
 void nm_http_deadline_bind(nm_http_deadline *, esp_http_client_handle_t);
 bool nm_http_deadline_expired(nm_http_deadline *);
 /* Sticky local resource failure captured before an underlying transport closes. */

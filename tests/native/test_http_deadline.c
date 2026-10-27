@@ -325,6 +325,17 @@ int main(void)
         transient_reads = 0;
         release(d);
     }
+    d = request();
+    atomic_bool cancelled = false;
+    nm_http_deadline_cancel(d, &cancelled);
+    assert(!nm_http_deadline_expired(d));
+    atomic_store(&cancelled, true);
+    assert(nm_http_deadline_expired(d) && budget(d, 100) == 0);
+    release(d);
+    d = request();
+    nm_http_deadline_stop(d);
+    assert(nm_http_deadline_expired(d) && budget(d, 100) == 0);
+    release(d);
     puts("HTTP deadline unit tests passed: shared budget, DNS/TLS timeout, redirects, cleanup");
     return 0;
 }

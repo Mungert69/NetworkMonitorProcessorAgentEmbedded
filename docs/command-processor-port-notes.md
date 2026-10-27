@@ -27,7 +27,7 @@ monitoring state must remain processor-task-owned.
 
 ## Current progress
 
-### Six implemented command processors
+### Seven implemented command processors
 
 `QuantumConnect` now has a separate typed parser/worker policy in
 `quantum_connect_cmd_processor.*`. `openssl_runner.*` is the process-like TLS
@@ -46,7 +46,7 @@ This describes the tested connection, not proof that the server supports no PQ
 algorithms. Cancellation and timeout remain separate failed results. Successful
 handshake and certificate-reporting behavior is unchanged.
 
-`cmd_processor_catalog.*` dispatches typed requests to six independent command
+`cmd_processor_catalog.*` dispatches typed requests to seven independent command
 policies. It has no MQTT, JSON or provider-library dependencies. `cmd_output.*`
 owns bounded PSRAM diagnostic text; overflow returns a short failed result,
 never a permanently unpublishable result. Ordinary TLS reports remain capped at
@@ -134,7 +134,7 @@ one completed result for retry; retry does not reexecute the command or grow
 the JSON arena. `SendMessage=false` suppresses the completed execution result,
 not its acknowledgement (matching .NET). No command writes NVS/model data.
 
-All six types are absent from compiled/template DisabledCommands. Existing
+All seven types are absent from compiled/template DisabledCommands. Existing
 enrolled configurations with explicit restrictions remain restricted: update
 that configuration intentionally, then re-register
 to refresh backend capability reporting. Firmware does not silently remove
@@ -157,3 +157,53 @@ duplicate requests, partial task startup, failed publication retry and nested
 metadata/uint64 preservation. Real TLS tests remain under `tests/integration/quantum`.
 Board tests are under `tests/integration/quantum_command`; their fixtures use the
 original .NET model and production ML-DSA signer. See its README for scope.
+
+### CameraCapture on ESP32-S3
+
+`CameraCapture` returns a JPEG using the .NET `RawData` base64 fields, MIME type,
+length and SHA-256. It supports authenticated RTSP/1.0 over TCP with RFC 2435
+RTP/JPEG (static payload 26), direct HTTP(S) JPEG and ONVIF Media1 snapshot or
+stream discovery. The Tapo C211 native JPEG profile uses `/stream8` on port 554;
+its ONVIF device service uses port 2020 and does not implement GetSnapshotUri.
+Credentials remain request/private configuration data and are omitted from output.
+
+This embedded adaptation preserves native dimensions rather than resizing and
+limits a JPEG to 64 KiB within the existing signed MQTT reply limit. H264/H265,
+FFmpeg execution, insecure HTTPS, redirects and cross-host advertised URLs are
+unsupported. The command retains the existing signature/AuthKey gates and
+cancellation/deadline contract. Existing enrolled configurations that explicitly
+disable `cameracapture` must be deliberately updated and their registration refreshed.
+
+The C211 compatibility path restores an eight-byte JPEG prefix overwritten by
+its RTP/JPEG header only when the surviving 63 luma quantizers match standard
+JPEG tables and uniquely determine the missing quantizer. Standard RFC 2435
+streams retain their separate reconstruction path. A synthetic public JPEG
+fixture verifies byte-for-byte restoration; camera frames remain private.
+
+
+### Version 0.5.1 validation and board update — 2026-10-27
+
+All 42 native ASan/UBSan tests passed; the camera, capability and HTTP deadline
+targets also passed after the final parser/deadline adjustments. Tooling checks
+passed (53 tests, one skipped). The .NET compatibility check verified eight
+fixture files and 113 deserialization assertions; the strict fixture check has
+manifest drift, so byte-for-byte manifest reproducibility is not claimed.
+The real ESP-IDF emulator transport suite passed
+HTTP Basic/Digest, SOAP discovery, body bounds, cancellation and authenticated
+RTSP/TCP JPEG reconstruction; see the
+[camera integration instructions](../tests/integration/camera_capture/README.md).
+An authenticated C211 capture through the production RTSP/JPEG code on the host
+was decoded independently by Pillow and FFmpeg. Public tests use synthetic
+images; camera credentials and captures remain outside tracked files.
+
+The signed 0.5.1 image verified against the existing signing key and was uploaded
+over USB to the enrolled board's active OTA app slot. This was an app-only USB
+update, not an HTTPS OTA lifecycle/rollback test. The existing configuration was
+updated only to remove `cameracapture` from `DisabledCommands`; identity, account
+and monitoring state were preserved. Both writes passed flash verification.
+Startup reported 0.5.1, ready and MQTT connected without a detected crash.
+An authenticated capability-registration refresh received broker PUBACK; backend
+application acceptance was not independently checked. A signed CameraCapture
+request and image reply through the live backend on this board remain to be
+verified. The separate Hal9000 client was rebuilt with its updated private
+camera context and reached chat ready; no camera credentials belong in this repo.

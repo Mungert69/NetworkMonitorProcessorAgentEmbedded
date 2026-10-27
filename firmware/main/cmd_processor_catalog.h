@@ -6,6 +6,7 @@
 #include "quantum_info_cmd_processor.h"
 #include "openssl_cmd_processor.h"
 #include "nmap_cmd_processor.h"
+#include "camera_capture_cmd_processor.h"
 typedef enum {
     NM_CMD_CERT,
     NM_CMD_CONNECT,
@@ -13,6 +14,7 @@ typedef enum {
     NM_CMD_INFO,
     NM_CMD_OPENSSL,
     NM_CMD_NMAP,
+    NM_CMD_CAMERA,
     NM_CMD_COUNT
 } nm_cmd_kind;
 typedef struct {
@@ -24,6 +26,7 @@ typedef struct {
         nm_quantum_info_command info;
         nm_openssl_command openssl;
         nm_nmap_command nmap;
+        nm_camera_command camera;
     } data;
 } nm_embedded_command;
 bool nm_cmd_kind_find(const char *type, nm_cmd_kind *kind);
