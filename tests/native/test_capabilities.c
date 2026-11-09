@@ -14,7 +14,15 @@ int main(void) {
     yyjson_mut_val *data=yyjson_mut_obj(doc);
     CHECK(nm_capabilities_add(doc,data,NULL));
     yyjson_mut_val *endpoints=yyjson_mut_obj_get(data,"DisabledEndPointTypes");
+    #if defined(CONFIG_BT_NIMBLE_ENABLED) && CONFIG_BT_NIMBLE_ENABLED
+    CHECK(yyjson_mut_arr_size(endpoints)==9);
+    CHECK(!contains(yyjson_mut_obj_get(data,"DisabledCommands"),"blebroadcast"));
+    CHECK(!contains(yyjson_mut_obj_get(data,"DisabledCommands"),"blebroadcastlisten"));
+#else
     CHECK(yyjson_mut_arr_size(endpoints)==11);
+    CHECK(contains(yyjson_mut_obj_get(data,"DisabledCommands"),"blebroadcast"));
+    CHECK(contains(yyjson_mut_obj_get(data,"DisabledCommands"),"blebroadcastlisten"));
+#endif
     const char *supported[]={"icmp","http","https","httphtml","dns","rawconnect","nmap"};
     for (unsigned i=0;i<sizeof(supported)/sizeof(*supported);i++)
         CHECK(!contains(endpoints,supported[i]));
@@ -31,7 +39,11 @@ int main(void) {
     yyjson_mut_val *settings=yyjson_mut_doc_get_root(settings_doc);
     doc=yyjson_mut_doc_new(NULL); data=yyjson_mut_obj(doc);
     CHECK(nm_capabilities_add(doc,data,settings));
+    #if defined(CONFIG_BT_NIMBLE_ENABLED) && CONFIG_BT_NIMBLE_ENABLED
+    CHECK(yyjson_mut_arr_size(yyjson_mut_obj_get(data,"DisabledEndPointTypes"))==10);
+#else
     CHECK(yyjson_mut_arr_size(yyjson_mut_obj_get(data,"DisabledEndPointTypes"))==12);
+#endif
     CHECK(contains(yyjson_mut_obj_get(data,"DisabledCommands"),"custom"));
     yyjson_mut_doc_free(doc); yyjson_mut_doc_free(settings_doc);
     const char *invalid[]={"{\"DisabledCommands\":true}","{\"DisabledEndpointTypes\":[42]}","{\"DisabledCommands\":[\"\"]}"};

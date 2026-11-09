@@ -7,5 +7,9 @@
 #else
 #define NM_DISABLED_ENDPOINTS_JSON "[\"httpfull\",\"sitehash\",\"configintegrity\",\"smtp\",\"blebroadcast\",\"blebroadcastlisten\",\"nmapvuln\",\"crawlsite\",\"dailycrawl\",\"dailyhugkeepalive\",\"hugwake\"]"
 #endif
+#if defined(CONFIG_BT_NIMBLE_ENABLED) && CONFIG_BT_NIMBLE_ENABLED
+#define NM_DISABLED_COMMANDS_JSON "[\"meta\",\"metalive\",\"busybox\",\"searchweb\",\"searchengage\",\"crawlpage\",\"crawlsite\",\"hugspacewake\",\"hugspacekeepalive\",\"ping\",\"msfconsole\"]"
+#else
 #define NM_DISABLED_COMMANDS_JSON "[\"meta\",\"metalive\",\"busybox\",\"searchweb\",\"searchengage\",\"crawlpage\",\"crawlsite\",\"hugspacewake\",\"hugspacekeepalive\",\"ping\",\"blebroadcast\",\"blebroadcastlisten\",\"msfconsole\"]"
+#endif
 #endif

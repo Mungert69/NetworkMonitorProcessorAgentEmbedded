@@ -1,6 +1,6 @@
 # ESP32-S3 native processor prototype
 
-This ESP-IDF firmware targets **16 MB flash / 8 MB PSRAM** and uses ESP-IDF v6.1. Host tests exercise native firmware code in this repository. This firmware is **not a complete replacement** for the .NET processor: it supports DNS, ICMP, TCP/rawconnect, HTTP/HTTPS/httphtml, passive BLE broadcast/listen, quantum handshake/certificate and bounded TCP Nmap-style probes, MQTT v2 ingress/egress, Brotli quality-0 data, bounded pending pings, NVS persistence, ML-DSA command verification and two-slot HTTPS OTA. Seven embedded command processors, including native JPEG CameraCapture, are available on this feature branch; OpenSSL/Nmap support is deliberately bounded. Other specialist endpoints and complete command parity remain out of scope. See [monitoring parity](monitoring-parity.md) and [command implementation notes](command-processor-port-notes.md) for supported behaviour and adaptations.
+This ESP-IDF firmware targets **16 MB flash / 8 MB PSRAM** and uses ESP-IDF v6.1. Host tests exercise native firmware code in this repository. This firmware is **not a complete replacement** for the .NET processor: it supports DNS, ICMP, TCP/rawconnect, HTTP/HTTPS/httphtml, passive BLE broadcast/listen, quantum handshake/certificate and bounded TCP Nmap-style probes, MQTT v2 ingress/egress, Brotli quality-0 data, bounded pending pings, NVS persistence, ML-DSA command verification and two-slot HTTPS OTA. Nine embedded command processors, including native JPEG CameraCapture, are available on this feature branch; OpenSSL/Nmap support is deliberately bounded. Other specialist endpoints and complete command parity remain out of scope. See [monitoring parity](monitoring-parity.md) and [command implementation notes](command-processor-port-notes.md) for supported behaviour and adaptations.
 
 The 16 MB partition table has two 6 MiB app slots (`ota_0`, `ota_1`), an `otadata` selector, 56 KiB of device configuration (`nmconfig`), and 2 MiB of processor state (`nmdata`). App updates replace only the inactive app slot; they leave configuration and state intact.
 
@@ -345,8 +345,8 @@ AES-CCM packets. See [decoder design, specifications and test procedure](ble-dec
 (for example `--format bthome --metric temperature`). `--manufacturer_id`, `--payload manufacturer|service|raw`,
 `--service_uuid` (16/32-bit or canonical GUID), `--raw_payload` (bounded hex),
 `--nonce_len`, `--tag_len`, and `--nonce_at start|end` are accepted. A raw-payload
-override skips RF scanning, as in .NET. BLE command processors remain
-unsupported. The passive scanner cannot
+override skips RF scanning, as in .NET. The `BleBroadcast` and `BleBroadcastListen` commands reuse this scanner and
+decoders; see [command limits and examples](command-processor-port-notes.md#ble-command-processors). The passive scanner cannot
 obtain scan-response-only fields. No physical-board BLE integration result is
 implied by the host filter/endpoint tests or firmware build.
 

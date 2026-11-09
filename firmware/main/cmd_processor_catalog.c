@@ -2,11 +2,12 @@
 #include "nm_memory.h"
 #include <strings.h>
 
-static const char *const types[] = {"QuantumCert",  "QuantumConnect", "QuantumPortScanner",
-                                    "QuantumInfo",  "Openssl",        "Nmap",
-                                    "CameraCapture"};
-static const char *const names[] = {"quantum-cert", "quantum", "quantum-scan", "quantuminfo",
-                                    "openssl",      "nmap",    "cameracapture"};
+static const char *const types[] = {"QuantumCert",   "QuantumConnect", "QuantumPortScanner",
+                                    "QuantumInfo",   "Openssl",        "Nmap",
+                                    "CameraCapture", "BleBroadcast",   "BleBroadcastListen"};
+static const char *const names[] = {"quantum-cert",  "quantum",      "quantum-scan",
+                                    "quantuminfo",   "openssl",      "nmap",
+                                    "cameracapture", "blebroadcast", "blebroadcastlisten"};
 const char *nm_cmd_kind_type(nm_cmd_kind kind)
 {
     return kind < NM_CMD_COUNT && kind >= 0 ? types[kind] : NULL;
@@ -43,6 +44,9 @@ const char *nm_cmd_kind_help(nm_cmd_kind kind)
         return nm_nmap_cmd_help();
     case NM_CMD_CAMERA:
         return nm_camera_cmd_help();
+    case NM_CMD_BLE:
+    case NM_CMD_BLE_LISTEN:
+        return nm_ble_cmd_help(kind == NM_CMD_BLE_LISTEN);
     default:
         return "Unknown command processor";
     }
@@ -81,6 +85,12 @@ bool nm_cmd_kind_parse(nm_cmd_kind kind, const char *arguments, unsigned timeout
             return false;
         limit_timeout(&request->data.openssl.timeout_ms, timeout_ms);
         break;
+    case NM_CMD_BLE:
+    case NM_CMD_BLE_LISTEN:
+        if (!nm_ble_cmd_parse(arguments, kind == NM_CMD_BLE_LISTEN, &request->data.ble, error))
+            return false;
+        request->data.ble.timeout_ms = timeout_ms;
+        break;
     case NM_CMD_CAMERA:
         if (!nm_camera_cmd_parse(arguments, &request->data.camera, error))
             return false;
@@ -111,6 +121,9 @@ nm_cmd_result nm_cmd_kind_run(const nm_embedded_command *request, const atomic_b
         return nm_quantum_info_cmd_run(&request->data.info, cancellation);
     case NM_CMD_OPENSSL:
         return nm_openssl_cmd_run(&request->data.openssl, cancellation);
+    case NM_CMD_BLE:
+    case NM_CMD_BLE_LISTEN:
+        return nm_ble_cmd_run(&request->data.ble, cancellation);
     case NM_CMD_CAMERA:
         return nm_camera_cmd_run(&request->data.camera, cancellation);
     case NM_CMD_NMAP:

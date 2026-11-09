@@ -112,7 +112,7 @@ static void test_victron(void)
     nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && !strcmp(result.status, "BLE v2:victron:pv_power"));
     assert(result.has_sample && result.sample == 123 &&
-           strstr(result.message, "Last observed value for this data set: pv_power=123 W"));
+           strstr(result.message, "Pv Power: 123 W"));
     assert(!result.detail_message && !strstr(result.message, "Battery voltage:"));
     reset_packets();
     nm_esp_result_release(&result);
@@ -183,27 +183,27 @@ static void test_aes_vectors(void)
     uint8_t zero_key[16] = {0};
     for (unsigned tag_length = 12; tag_length <= 16; ++tag_length) {
         size_t length = 12 + 16 + tag_length;
-        assert(decrypt_payload("aesgcm", (byte_span){gcm_payload, length}, zero_key, 16, 12,
-                               tag_length, false, out, &plaintext));
+        assert(nm_ble_payload_decrypt_payload("aesgcm", (byte_span){gcm_payload, length}, zero_key,
+                                              16, 12, tag_length, false, out, &plaintext));
         assert(plaintext.length == 16);
         for (size_t i = 0; i < 16; ++i)
             assert(plaintext.bytes[i] == 0);
         uint8_t corrupt[sizeof(gcm_payload)];
         memcpy(corrupt, gcm_payload, length);
         corrupt[length - 1] ^= 1;
-        assert(!decrypt_payload("aesgcm", (byte_span){corrupt, length}, zero_key, 16, 12,
-                                tag_length, false, out, &plaintext));
+        assert(!nm_ble_payload_decrypt_payload("aesgcm", (byte_span){corrupt, length}, zero_key, 16,
+                                               12, tag_length, false, out, &plaintext));
     }
-    assert(decrypt_payload("aesgcm", (byte_span){gcm_payload, sizeof(gcm_payload)}, zero_key, 16,
-                           12, 16, false, out, &plaintext));
+    assert(nm_ble_payload_decrypt_payload("aesgcm", (byte_span){gcm_payload, sizeof(gcm_payload)},
+                                          zero_key, 16, 12, 16, false, out, &plaintext));
     assert(plaintext.length == 16);
     for (size_t i = 0; i < plaintext.length; ++i)
         assert(plaintext.bytes[i] == 0);
     uint8_t bad[sizeof(gcm_payload)];
     memcpy(bad, gcm_payload, sizeof(bad));
     bad[sizeof(bad) - 1] ^= 1;
-    assert(!decrypt_payload("aesgcm", (byte_span){bad, sizeof(bad)}, zero_key, 16, 12, 16, false,
-                            out, &plaintext));
+    assert(!nm_ble_payload_decrypt_payload("aesgcm", (byte_span){bad, sizeof(bad)}, zero_key, 16,
+                                           12, 16, false, out, &plaintext));
     static const uint8_t ctr_key[16] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
                                         0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
     static const uint8_t ctr_payload[32] = {0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
@@ -212,38 +212,41 @@ static void test_aes_vectors(void)
                                             0x1b, 0xef, 0x68, 0x64, 0x99, 0x0d, 0xb6, 0xce};
     static const uint8_t ctr_plain[16] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
                                           0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
-    assert(decrypt_payload("aesctr", (byte_span){ctr_payload, sizeof(ctr_payload)}, ctr_key, 16, 16,
-                           16, false, out, &plaintext));
+    assert(nm_ble_payload_decrypt_payload("aesctr", (byte_span){ctr_payload, sizeof(ctr_payload)},
+                                          ctr_key, 16, 16, 16, false, out, &plaintext));
     assert(plaintext.length == 16 && !memcmp(plaintext.bytes, ctr_plain, 16));
 }
 static void test_service_and_raw_override(void)
 {
     uint8_t uuid[16] = {0};
     size_t uuid_length = 0;
-    assert(parse_service_uuid("180F", uuid, &uuid_length));
+    assert(nm_ble_payload_parse_service_uuid("180F", uuid, &uuid_length));
     assert(uuid_length == 2 && uuid[0] == 0x0f && uuid[1] == 0x18);
-    assert(parse_service_uuid("00112233-4455-6677-8899-AABBCCDDEEFF", uuid, &uuid_length));
+    assert(nm_ble_payload_parse_service_uuid("00112233-4455-6677-8899-AABBCCDDEEFF", uuid,
+                                             &uuid_length));
     assert(uuid_length == 16 && uuid[0] == 0 && uuid[15] == 0xff);
     nm_ble_advertisement guid_service = {.data_length = 19,
                                          .data = {18, 0x21, 0x33, 0x22, 0x11, 0x00, 0x55, 0x44,
                                                   0x77, 0x66, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
                                                   0xee, 0xff, 0x42}};
     const char *guid_type = "raw";
-    byte_span guid_selected =
-        advertisement_payload(&guid_service, &guid_type, -1, "service", uuid, uuid_length);
+    byte_span guid_selected = nm_ble_payload_advertisement_payload(&guid_service, &guid_type, -1,
+                                                                   "service", uuid, uuid_length);
     assert(!strcmp(guid_type, "service") && guid_selected.length == 1 &&
            guid_selected.bytes[0] == 0x42);
-    assert(!parse_service_uuid("bad-uuid", uuid, &uuid_length));
-    assert(parse_service_uuid("180F", uuid, &uuid_length));
+    assert(!nm_ble_payload_parse_service_uuid("bad-uuid", uuid, &uuid_length));
+    assert(nm_ble_payload_parse_service_uuid("180F", uuid, &uuid_length));
     nm_ble_advertisement service = {.address = "AA:BB:CC:DD:EE:FF",
                                     .data = {5, 0x16, 0x0f, 0x18, 0x42, 0x43},
                                     .data_length = 6};
     const char *type = "raw";
-    byte_span selected = advertisement_payload(&service, &type, -1, "service", uuid, uuid_length);
+    byte_span selected =
+        nm_ble_payload_advertisement_payload(&service, &type, -1, "service", uuid, uuid_length);
     assert(!strcmp(type, "service") && selected.length == 2 && selected.bytes[0] == 0x42 &&
            selected.bytes[1] == 0x43);
     uuid[0] = 0x00;
-    selected = advertisement_payload(&service, &type, -1, "service", uuid, uuid_length);
+    selected =
+        nm_ble_payload_advertisement_payload(&service, &type, -1, "service", uuid, uuid_length);
     assert(!strcmp(type, "raw") && selected.length == service.data_length);
 
     reset_packets();
@@ -328,8 +331,8 @@ static void test_changing_metric_readings(void)
             uint16_t encoded;
             assert(nm_ble_metric_encode(encoding, cases[i].values[sample] / divisor, &encoded));
             assert(result.has_sample && result.sample == encoded);
-            assert(strstr(result.message, "Last observed value for this data set:"));
-            assert(strstr(result.message, nm_ble_metric_canonical(cases[i].metric)));
+            assert(!strstr(result.message, "Last observed"));
+            assert(strstr(result.message, "; sample="));
             assert(!result.detail_message && !strstr(result.message, "Battery voltage:"));
             nm_esp_result_release(&result);
         }
@@ -339,7 +342,7 @@ static void test_changing_metric_readings(void)
 static size_t from_hex(const char *hex, uint8_t bytes[255])
 {
     size_t n = 0;
-    assert(parse_hex_payload(hex, bytes, &n));
+    assert(nm_ble_payload_parse_hex_payload(hex, bytes, &n));
     return n;
 }
 static void test_protocol_decoders(void)
@@ -366,7 +369,7 @@ static void test_protocol_decoders(void)
     assert(strstr(output, "Temperature: NA") && strstr(output, "Battery voltage: NA") &&
            strstr(output, "Device MAC: NA"));
     length = from_hex("D2FC41E445F3C9962B332211006C7C4519", bytes);
-    assert(parse_key("231D39C1D7CC1AB1AEE224CD096DB932", key, &key_length));
+    assert(nm_ble_payload_parse_key("231D39C1D7CC1AB1AEE224CD096DB932", key, &key_length));
     assert(nm_ble_decoder_decode(bthome, (nm_ble_bytes){bytes, length}, "raw_input",
                                  "54:48:E6:8F:80:A5", key, key_length, output, sizeof(output)));
     assert(strstr(output, "Temperature: 25.06 °C") && strstr(output, "Humidity: 50.55 %") &&
@@ -564,7 +567,7 @@ static void test_sensor_endpoints(void)
                                  .Args = "--format bthome --metric temperature"};
     nm_esp_result result = run_ble(&monitor, 100);
     assert(result.ok && !result.detail_message &&
-           strstr(result.message, "Last observed value for this data set: temperature=25 °C") &&
+           strstr(result.message, "Temperature: 25 °C") &&
            !strstr(result.message, "Humidity:"));
     nm_esp_result_release(&result);
     reset_packets();
@@ -575,7 +578,7 @@ static void test_sensor_endpoints(void)
     monitor.Args = "--format ruuvi --metric temperature";
     result = run_ble(&monitor, 100);
     assert(result.ok && !result.detail_message &&
-           strstr(result.message, "Last observed value for this data set: temperature="));
+           strstr(result.message, "Temperature: "));
     nm_esp_result_release(&result);
     reset_packets();
     add_victron((uint8_t[16]){0}, 1);
@@ -735,12 +738,16 @@ static void test_window_averaging(void)
     assert(nm_ble_metric_encode(nm_ble_metric_find("victron", "battery_current"), -1.0, &expected));
     assert(result.ok && result.sample == expected);
     assert(!result.detail_message &&
-           strstr(result.message, "Last observed value for this data set: battery_current=-1 A"));
+           strstr(result.message, "Battery Current: -1 A") &&
+           !strstr(result.message, "Battery Current: -0.9 A") &&
+           !strstr(result.message, "Last observed") &&
+           !strstr(result.message, "Window average"));
     nm_esp_result_release(&result);
     monitor.Args = "--format victron --metric battery_voltage";
     result = nm_endpoint_check_ble(&monitor, 70000);
     assert(nm_ble_metric_encode(nm_ble_metric_find("victron", "battery_voltage"), 13.1, &expected));
     assert(result.ok && result.sample == expected);
+    assert(strstr(result.message, "Battery Voltage: 13.1 V"));
     nm_esp_result_release(&result);
     monitor.EndPointType = "blebroadcastlisten";
     monitor.Args = NULL;

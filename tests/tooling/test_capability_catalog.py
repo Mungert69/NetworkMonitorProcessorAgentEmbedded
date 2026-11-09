@@ -33,7 +33,7 @@ class CapabilityCatalogTests(unittest.TestCase):
             endpoint_defaults.discard("blebroadcast")
             endpoint_defaults.discard("blebroadcastlisten")
             self.assertEqual(set(settings["DisabledEndpointTypes"]), endpoint_defaults)
-            self.assertEqual(settings["DisabledCommands"], defaults["NM_DISABLED_COMMANDS_JSON"])
+            self.assertEqual(settings["DisabledCommands"], [x for x in defaults["NM_DISABLED_COMMANDS_JSON"] if x not in {"blebroadcast", "blebroadcastlisten"}])
             self.assertFalse(SUPPORTED.intersection(settings["DisabledEndpointTypes"]))
         if not (LIB / "Objects/Factory/EndPointTypeFactory.cs").is_file():
             self.skipTest("Sibling NetworkMonitorLib needed for catalog drift check")
@@ -45,7 +45,7 @@ class CapabilityCatalogTests(unittest.TestCase):
         provider = (LIB / "Objects/Connection/CommandProcessors/CmdProcessorProvider.cs").read_text()
         core = provider.split("_coreProcessorTypes = new()", 1)[1].split("};", 1)[0]
         commands = {x.lower() for x in re.findall(r'"([^"]+)"', core)}
-        self.assertFalse(commands - {"quantumcert", "quantumconnect", "quantumportscanner", "quantuminfo", "openssl", "nmap", "cameracapture"} - set(defaults["NM_DISABLED_COMMANDS_JSON"]))
+        self.assertFalse(commands - {"quantumcert", "quantumconnect", "quantumportscanner", "quantuminfo", "openssl", "nmap", "cameracapture", "blebroadcast", "blebroadcastlisten"} - set(defaults["NM_DISABLED_COMMANDS_JSON"]))
         self.assertNotIn("quantumcert", defaults["NM_DISABLED_COMMANDS_JSON"])
         self.assertNotIn("quantum-cert", defaults["NM_DISABLED_COMMANDS_JSON"])
 

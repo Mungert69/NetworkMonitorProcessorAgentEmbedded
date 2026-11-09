@@ -139,6 +139,7 @@ processor implementation in this repository.
 | `processor_cmd.c`, `cmd_processor_message.*` | Bounded command worker/replies and .NET output codec |
 | `cmd_processor_catalog.*`, `cmd_arguments.*`, `cmd_output.*` | Fixed typed command dispatch, bounded CLI parsing and owned PSRAM output |
 | `quantum_*_cmd_processor.*`, `openssl_cmd_processor.*`, `nmap_cmd_processor.*` | Individual command policies; keep transport and provider handles out of these interfaces |
+| `ble_cmd_processor.*`, `ble_payload.*` | BLE command policies/snapshot reports and shared payload parsers/crypto |
 | `openssl_runner.*`, `nmap_runner*`, `tls_inspection.*` | Typed process-like OpenSSL/wolfSSL and TCP scanner adapters |
 | `openssl_arguments.c` | Bounded OpenSSL command parsing/conflicts; see [compatibility report](openssl-adapter.md) |
 | `processor_messages.c`, `message_publish.c`, `processor_ota.c`, `ota.c` | Ready/status payloads, shared encoding, OTA command/job coordination, image installation |
@@ -227,9 +228,9 @@ Both BLE endpoints share one
 passive NimBLE scanner; they do not create a scanner per monitor. See the
 [BLE support notes](guide.md#ble-broadcast-monitoring) and
 [decoder port reference](ble-decoders.md) for packet filtering,
-supported options, and the bounded listen-output adaptation. BLE command
-processors remain unsupported. Supported command types are `QuantumCert`,
-`QuantumConnect`, `QuantumPortScanner`, `QuantumInfo`, `Openssl` and `Nmap`.
+supported options, and the bounded listen-output adaptation. Supported command types are `QuantumCert`, `QuantumConnect`,
+`QuantumPortScanner`, `QuantumInfo`, `Openssl`, `Nmap`, `CameraCapture`,
+`BleBroadcast` and `BleBroadcastListen`.
 Command policy, typed process-like runner and provider layers are separate;
 OpenSSL/Nmap support is a documented subset, not arbitrary binary execution.
 See [command implementation notes](command-processor-port-notes.md)
@@ -242,7 +243,9 @@ unimplemented features; extra configured restrictions are merged into those list
 
 The backend stores these capabilities at registration. Updating firmware or
 appsettings alone does not refresh an already registered processor's database
-record: re-register it to publish the updated capabilities. No new topics or backend
+record: a coordinated registration must publish the updated capabilities and
+verify/install the replacement AuthKey. Registration rotates AuthKey; a
+fire-and-forget registration helper breaks the enrolled device authentication. No new topics or backend
 schema changes are required. Future additions to the .NET catalog must also be
 added to the disabled lists until implemented; run
 `python3 tests/tooling/test_capability_catalog.py` with the sibling NetworkMonitorLib

@@ -199,7 +199,7 @@ target_compile_definitions(test_ble_filter PRIVATE _POSIX_C_SOURCE=200809L)
 target_link_libraries(test_ble_filter PRIVATE OpenSSL::Crypto m)
 target_compile_options(test_ble_filter PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 add_test(NAME native-ble_filter COMMAND test_ble_filter)
-add_executable(test_ble_endpoint tests/native/test_ble_endpoint.c firmware/main/ble_buffer.c tests/native/ble_crypto_adapter.c firmware/main/ble_decoder.c firmware/main/ble_crypto.c firmware/main/ble_metric.c firmware/main/ble_victron_decoder.c firmware/main/ble_victron_records.c firmware/main/ble_ruuvi_decoder.c firmware/main/ble_bthome_decoder.c)
+add_executable(test_ble_endpoint tests/native/test_ble_endpoint.c firmware/main/ble_buffer.c tests/native/ble_crypto_adapter.c firmware/main/ble_decoder.c firmware/main/ble_crypto.c firmware/main/ble_metric.c firmware/main/ble_victron_decoder.c firmware/main/ble_victron_records.c firmware/main/ble_ruuvi_decoder.c firmware/main/ble_bthome_decoder.c firmware/main/ble_payload.c)
 target_include_directories(test_ble_endpoint PRIVATE tests/native/endpoint_stubs firmware/main third_party/yyjson/src)
 target_compile_definitions(test_ble_endpoint PRIVATE _POSIX_C_SOURCE=200809L)
 target_compile_options(test_ble_endpoint PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
@@ -221,11 +221,16 @@ add_executable(test_quantum_cert_cmd tests/native/test_quantum_cert_cmd.c
     firmware/main/quantum_port_scanner_cmd_processor.c firmware/main/quantum_info_cmd_processor.c
     firmware/main/openssl_cmd_processor.c firmware/main/openssl_arguments.c
     firmware/main/nmap_cmd_processor.c firmware/main/nmap_targets.c
-    firmware/main/processor_cmd.c firmware/main/camera_capture_cmd_processor.c)
-target_include_directories(test_quantum_cert_cmd PRIVATE tests/native/cmd_stubs tests/stubs firmware/main)
+    firmware/main/processor_cmd.c firmware/main/camera_capture_cmd_processor.c
+    firmware/main/ble_cmd_processor.c firmware/main/ble_payload.c firmware/main/ble_buffer.c
+    firmware/main/ble_decoder.c firmware/main/ble_crypto.c firmware/main/ble_metric.c
+    firmware/main/ble_victron_decoder.c firmware/main/ble_victron_records.c
+    firmware/main/ble_ruuvi_decoder.c firmware/main/ble_bthome_decoder.c
+    tests/native/ble_crypto_adapter.c tests/native/ble_base64_adapter.c)
+target_include_directories(test_quantum_cert_cmd PRIVATE tests/native/cmd_stubs tests/stubs tests/native/endpoint_stubs firmware/main)
 target_compile_definitions(test_quantum_cert_cmd PRIVATE _POSIX_C_SOURCE=200809L)
 target_compile_options(test_quantum_cert_cmd PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
-target_link_libraries(test_quantum_cert_cmd PRIVATE yyjson Threads::Threads OpenSSL::Crypto)
+target_link_libraries(test_quantum_cert_cmd PRIVATE yyjson Threads::Threads OpenSSL::Crypto m)
 add_test(NAME native-quantum_cert_cmd COMMAND test_quantum_cert_cmd)
 set_tests_properties(native-quantum_cert_cmd PROPERTIES TIMEOUT 15)
 add_executable(test_openssl_adapter tests/native/test_openssl_adapter.c
@@ -303,3 +308,22 @@ add_executable(test_camera_jpeg tests/native/test_camera_jpeg.c firmware/main/ca
 target_include_directories(test_camera_jpeg PRIVATE firmware/main)
 target_compile_options(test_camera_jpeg PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
 add_test(NAME native-camera_jpeg COMMAND test_camera_jpeg ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/camera/synthetic.jpg)
+
+add_executable(test_ble_cmd tests/native/test_ble_cmd.c firmware/main/ble_cmd_processor.c
+    firmware/main/ble_payload.c firmware/main/ble_buffer.c firmware/main/cmd_arguments.c firmware/main/cmd_output.c
+    firmware/main/ble_decoder.c firmware/main/ble_crypto.c firmware/main/ble_metric.c
+    firmware/main/ble_victron_decoder.c firmware/main/ble_victron_records.c
+    firmware/main/ble_ruuvi_decoder.c firmware/main/ble_bthome_decoder.c
+    tests/native/ble_crypto_adapter.c tests/native/ble_base64_adapter.c)
+target_include_directories(test_ble_cmd PRIVATE tests/native/endpoint_stubs firmware/main)
+target_compile_definitions(test_ble_cmd PRIVATE _POSIX_C_SOURCE=200809L)
+target_compile_options(test_ble_cmd PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+target_link_libraries(test_ble_cmd PRIVATE Threads::Threads OpenSSL::Crypto m)
+add_test(NAME native-ble_cmd COMMAND test_ble_cmd)
+
+add_executable(test_capabilities_ble tests/native/test_capabilities.c)
+target_include_directories(test_capabilities_ble PRIVATE firmware/main)
+target_compile_definitions(test_capabilities_ble PRIVATE CONFIG_BT_NIMBLE_ENABLED=1)
+target_compile_options(test_capabilities_ble PRIVATE -Wall -Wextra -Wpedantic -Werror -UNDEBUG)
+target_link_libraries(test_capabilities_ble PRIVATE yyjson)
+add_test(NAME native-capabilities_ble COMMAND test_capabilities_ble)

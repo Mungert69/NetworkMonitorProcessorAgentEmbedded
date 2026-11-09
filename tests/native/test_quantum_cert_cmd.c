@@ -472,7 +472,8 @@ int main(void)
                                   "--target example.com --ports 443",
                                   "--algorithm mlkem768",
                                   "version",
-                                  "-p 443 example.com", "--address example.com --protocol onvif"};
+                                  "-p 443 example.com", "--address example.com --protocol onvif",
+    "--address AABBCCDDEEFF --raw_payload 0102", "--raw_payload 0102"};
     for (unsigned i = 0; i < NM_CMD_COUNT; ++i) {
         char id[32];
         snprintf(id, sizeof(id), "all-command-%u", i);

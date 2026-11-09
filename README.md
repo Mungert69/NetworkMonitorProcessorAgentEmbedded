@@ -28,7 +28,7 @@ this image and the same setup procedure.
 ## Monitoring support
 
 This embedded processor supports ICMP ping, DNS, TCP connection, HTTP/HTTPS,
-and passive Bluetooth LE broadcast monitoring. Seven bounded command processors
+and passive Bluetooth LE broadcast monitoring. Nine bounded command processors
 are implemented, including native JPEG CameraCapture in version 0.5.1. See the
 [command implementation notes](docs/command-processor-port-notes.md) for supported
 arguments, limits and differences from the .NET agent. Other endpoints and full

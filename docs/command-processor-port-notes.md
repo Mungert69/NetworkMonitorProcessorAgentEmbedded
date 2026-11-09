@@ -13,6 +13,9 @@ and `NetworkMonitorProcessorAgent/Services/RabbitListener.cs` as the reference.
 | `QuantumPortScannerCmdProcessor` | `QuantumPortScanner` |
 | `OpensslCmdProcessor` | `Openssl` |
 | `NmapCmdProcessor` | `Nmap` |
+| `CameraCaptureCmdProcessor` | `CameraCapture` |
+| `BleBroadcastCmdProcessor` | `BleBroadcast` |
+| `BleBroadcastListenCmdProcessor` | `BleBroadcastListen` |
 
 There is no generic `QuantumCmdProcessor`. The first embedded command module is
 `quantum_cert_cmd_processor.c/.h`. Its .NET-equivalent
@@ -27,7 +30,7 @@ monitoring state must remain processor-task-owned.
 
 ## Current progress
 
-### Seven implemented command processors
+### Nine implemented command processors
 
 `QuantumConnect` now has a separate typed parser/worker policy in
 `quantum_connect_cmd_processor.*`. `openssl_runner.*` is the process-like TLS
@@ -46,7 +49,7 @@ This describes the tested connection, not proof that the server supports no PQ
 algorithms. Cancellation and timeout remain separate failed results. Successful
 handshake and certificate-reporting behavior is unchanged.
 
-`cmd_processor_catalog.*` dispatches typed requests to seven independent command
+`cmd_processor_catalog.*` dispatches typed requests to nine independent command
 policies. It has no MQTT, JSON or provider-library dependencies. `cmd_output.*`
 owns bounded PSRAM diagnostic text; overflow returns a short failed result,
 never a permanently unpublishable result. Ordinary TLS reports remain capped at
@@ -207,3 +210,60 @@ application acceptance was not independently checked. A signed CameraCapture
 request and image reply through the live backend on this board remain to be
 verified. The separate Hal9000 client was rebuilt with its updated private
 camera context and reached chat ready; no camera credentials belong in this repo.
+
+## BLE command processors
+
+`BleBroadcast` and `BleBroadcastListen` use the shared passive scanner's latest
+immutable completed snapshot. They never start a second scanner, wait for a new
+advertisement, change retention rules, or mutate the monitoring model. They use
+the same signed command/AuthKey gates and worker as the other commands.
+
+Examples (select the registered command type separately):
+
+```text
+BleBroadcastListen: --payload raw
+BleBroadcastListen: --payload manufacturer --manufacturer_id 0x02e1
+BleBroadcast: --address AA:BB:CC:DD:EE:FF --format bthome --metric temperature
+BleBroadcast: --address AA:BB:CC:DD:EE:FF --format victron --key <private-key> --metric pv_power
+```
+
+Both accept `--payload`, `--manufacturer_id`, `--service_uuid` and
+`--raw_payload`. Broadcast additionally requires `--address` and accepts `--key`,
+`--format`, `--nonce_len`, `--tag_len`, `--nonce_at`, `--metric`,
+`--metric_scale` and `--metric_offset`. Formats are raw, AES-GCM, AES-CTR,
+Victron, Ruuvi RAWv2 and BTHome v2, using the existing decoder registry and
+crypto. Protocol payload defaults and hex/base64/raw keys follow the endpoint
+implementation. Raw overrides bypass scanner availability and metric selection.
+
+Listen returns all retained advertisements in the snapshot, including retained
+history from earlier cycles, matching .NET command `afterSequence=0`. Its legacy
+`key`, `format`, `nonce_len`, `tag_len`, `nonce_at` and `max_captures` options
+are accepted but ignored. Unlike the monitoring listen endpoint, this command
+is not restricted to the latest cycle's sequence range.
+
+Broadcast selects the requested address in the snapshot's last 70 seconds.
+Protocol metric values are averaged in physical units and reported alongside
+the latest usable decode. No metric scale/offset is applied by the command
+(the accepted legacy numeric options have no effect, as in the .NET command).
+Missing/unavailable metrics and undecodable packets do not produce successful
+protocol readings. Generic AES failures visibly return raw bytes, matching the
+.NET fallback. Generic raw/decrypted data is rendered as hex on ESP32, including
+printable plaintext. Decode diagnostics use the existing embedded decoder text.
+
+Arguments are limited to 4096 bytes, an override to 255 bytes, decoded text to
+8192 bytes, and the complete command report to 48 KiB and 256 lines. A report
+that exceeds either bound fails explicitly; it is never silently truncated or
+limited by the legacy max_captures option. Every packet checks cancellation and
+the overall command deadline. Scanner/history failures are explicit failures.
+Native command tests cover parsing, crypto, decoding, retained snapshots,
+metric averages, cancellation and report overflow; host tests and a signed
+firmware build do not establish physical BLE command execution.
+
+The public templates and NimBLE-enabled compiled defaults advertise both
+commands. Existing provisioned DisabledCommands lists remain additional
+restrictions and must be updated deliberately before deployment. Backend
+capability changes require a coordinated registration update: registration
+rotates AuthKey, so its signed replacement must be verified and installed by
+the device. Publishing registration alone with the old key leaves runtime
+commands and data authentication broken. Do not use a fire-and-forget
+registration helper on an enrolled running board.

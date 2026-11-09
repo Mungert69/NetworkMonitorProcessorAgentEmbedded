@@ -3,6 +3,8 @@
 #include <limits.h>
 #include <stddef.h>
 #include <openssl/evp.h>
+int mbedtls_base64_decode(unsigned char *out, size_t capacity, size_t *used,
+    const unsigned char *input, size_t length);
 #define MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL -0x002A
 /* Real RFC 4648 encoding; mbedTLS reports required capacity including NUL
  * on short buffers, and output length excluding NUL on success. */

@@ -1,3 +1,4 @@
+#include "ble_payload.h"
 #include "ble_buffer.h"
 #include "ble_crypto.h"
 #include "ble_metric.h"
@@ -32,47 +33,6 @@ static uint32_t diagnostic_fingerprint(const uint8_t *bytes, size_t length)
 
 typedef nm_ble_bytes byte_span;
 #define aes_ecb_encrypt_block nm_ble_aes_block
-
-static bool normalize_address(const char *input, char out[NM_BLE_ADDRESS_TEXT_SIZE])
-{
-    if (!input)
-        return false;
-    while (isspace((unsigned char)*input))
-        ++input;
-    size_t length = strlen(input);
-    while (length && isspace((unsigned char)input[length - 1]))
-        --length;
-    if (length == 12) {
-        for (size_t i = 0; i < 12; ++i)
-            if (!isxdigit((unsigned char)input[i]))
-                return false;
-        size_t dst = 0;
-        for (size_t i = 0; i < 12; i += 2) {
-            if (i)
-                out[dst++] = ':';
-            out[dst++] = (char)toupper((unsigned char)input[i]);
-            out[dst++] = (char)toupper((unsigned char)input[i + 1]);
-        }
-        out[dst] = '\0';
-        return true;
-    }
-    if (length != 17)
-        return false;
-    char separator = input[2];
-    if (separator != ':' && separator != '-')
-        return false;
-    for (size_t i = 0; i < length; ++i) {
-        if ((i + 1) % 3 == 0) {
-            if (input[i] != separator)
-                return false;
-        } else if (!isxdigit((unsigned char)input[i])) {
-            return false;
-        }
-        out[i] = (i + 1) % 3 == 0 ? ':' : (char)toupper((unsigned char)input[i]);
-    }
-    out[length] = '\0';
-    return true;
-}
 
 static bool next_argument(const char **cursor, char *token, size_t capacity)
 {
@@ -205,277 +165,6 @@ static int option_value(const char *arguments, const char *name, char *out, size
     return found;
 }
 
-static bool parse_hex_key(const char *text, uint8_t *key, size_t *key_length)
-{
-    size_t length = strlen(text);
-    if (length >= 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) {
-        text += 2;
-        length -= 2;
-    }
-    if ((length & 1U) || length > BLE_KEY_MAX * 2U)
-        return false;
-    for (size_t i = 0; i < length; i += 2) {
-        int hi = isdigit((unsigned char)text[i])    ? text[i] - '0'
-                 : isxdigit((unsigned char)text[i]) ? toupper((unsigned char)text[i]) - 'A' + 10
-                                                    : -1;
-        int lo = isdigit((unsigned char)text[i + 1]) ? text[i + 1] - '0'
-                 : isxdigit((unsigned char)text[i + 1])
-                     ? toupper((unsigned char)text[i + 1]) - 'A' + 10
-                     : -1;
-        if (hi < 0 || lo < 0)
-            return false;
-        key[i / 2] = (uint8_t)((hi << 4) | lo);
-    }
-    *key_length = length / 2;
-    return true;
-}
-
-static bool parse_key(const char *text, uint8_t *key, size_t *key_length)
-{
-    *key_length = 0;
-    if (!text || !*text)
-        return true;
-    char trimmed[128];
-    size_t length = strlen(text);
-    while (length && isspace((unsigned char)text[length - 1]))
-        --length;
-    size_t start = 0;
-    while (start < length && isspace((unsigned char)text[start]))
-        ++start;
-    length -= start;
-    if (!length)
-        return true;
-    if (length >= sizeof(trimmed))
-        return false;
-    memcpy(trimmed, text + start, length);
-    trimmed[length] = '\0';
-
-    bool all_hex = length >= 2 && trimmed[0] == '0' && (trimmed[1] == 'x' || trimmed[1] == 'X');
-    if (all_hex) {
-        for (size_t i = 2; i < length; ++i)
-            if (!isxdigit((unsigned char)trimmed[i]))
-                all_hex = false;
-    } else {
-        all_hex = length > 0;
-        for (size_t i = 0; i < length; ++i)
-            if (!isxdigit((unsigned char)trimmed[i]))
-                all_hex = false;
-    }
-    if (all_hex && parse_hex_key(trimmed, key, key_length)) {
-        /* A 16/24/32-character hexadecimal string is hex, matching .NET. */
-    } else {
-        size_t decoded = 0;
-        int error = mbedtls_base64_decode(key, BLE_KEY_MAX, &decoded,
-                                          (const unsigned char *)trimmed, length);
-        if (error == 0) {
-            *key_length = decoded;
-        } else if (length <= BLE_KEY_MAX) {
-            memcpy(key, trimmed, length);
-            *key_length = length;
-        } else {
-            return false;
-        }
-    }
-    return *key_length <= BLE_KEY_MAX;
-}
-
-static int hex_digit(char c)
-{
-    if (c >= '0' && c <= '9')
-        return c - '0';
-    if (c >= 'a' && c <= 'f')
-        return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F')
-        return c - 'A' + 10;
-    return -1;
-}
-
-static bool parse_hex_payload(const char *text, uint8_t out[NM_BLE_ADVERTISEMENT_MAX],
-                              size_t *length)
-{
-    if (!text || !length)
-        return false;
-    if (text[0] == '0' && (text[1] == 'x' || text[1] == 'X'))
-        text += 2;
-    size_t size = strlen(text);
-    if (!size || (size & 1U) || size > NM_BLE_ADVERTISEMENT_MAX * 2U)
-        return false;
-    for (size_t i = 0; i < size; i += 2) {
-        int hi = hex_digit(text[i]), lo = hex_digit(text[i + 1]);
-        if (hi < 0 || lo < 0)
-            return false;
-        out[i / 2] = (uint8_t)((hi << 4) | lo);
-    }
-    *length = size / 2;
-    return true;
-}
-
-/* UUIDs in 16/32-bit AD fields are little-endian; full GUID fields may be
- * exposed in Windows Guid memory order or BLE wire order. Accept both. */
-static bool parse_service_uuid(const char *text, uint8_t out[16], size_t *length)
-{
-    *length = 0;
-    if (!text || !*text)
-        return true;
-    if (text[0] == '0' && (text[1] == 'x' || text[1] == 'X'))
-        text += 2;
-    size_t n = strlen(text);
-    if (n == 4 || n == 8) {
-        *length = n / 2;
-        for (size_t i = 0; i < *length; ++i) {
-            size_t offset = n - 2 - i * 2;
-            int hi = hex_digit(text[offset]), lo = hex_digit(text[offset + 1]);
-            if (hi < 0 || lo < 0)
-                return false;
-            out[i] = (uint8_t)((hi << 4) | lo);
-        }
-        return true;
-    }
-    if (n != 36 || text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-')
-        return false;
-    size_t used = 0;
-    for (size_t i = 0; i < n; ++i) {
-        if (text[i] == '-')
-            continue;
-        if (i + 1 >= n || text[i + 1] == '-')
-            return false;
-        int hi = hex_digit(text[i]), lo = hex_digit(text[++i]);
-        if (hi < 0 || lo < 0 || used >= 16)
-            return false;
-        out[used++] = (uint8_t)((hi << 4) | lo);
-    }
-    *length = used;
-    return used == 16;
-}
-
-static bool service_uuid_equal(const uint8_t *value, const uint8_t *uuid, size_t length)
-{
-    if (length <= 4)
-        return !memcmp(value, uuid, length);
-    uint8_t windows[16];
-    for (size_t i = 0; i < 16; ++i)
-        windows[i] = uuid[i];
-    windows[0] = uuid[3];
-    windows[1] = uuid[2];
-    windows[2] = uuid[1];
-    windows[3] = uuid[0];
-    windows[4] = uuid[5];
-    windows[5] = uuid[4];
-    windows[6] = uuid[7];
-    windows[7] = uuid[6];
-    if (!memcmp(value, windows, 16))
-        return true;
-    for (size_t i = 0; i < 16; ++i)
-        if (value[i] != uuid[15 - i])
-            return false;
-    return true;
-}
-
-static byte_span advertisement_payload(const nm_ble_advertisement *advertisement,
-                                       const char **payload_type, int company, const char *mode,
-                                       const uint8_t *service_uuid, size_t service_uuid_length)
-{
-    if (!strcmp(mode, "raw")) {
-        *payload_type = "raw";
-        return (byte_span){.bytes = advertisement->data, .length = advertisement->data_length};
-    }
-    if (!strcmp(mode, "service")) {
-        for (size_t offset = 0; offset < advertisement->data_length;) {
-            size_t field = advertisement->data[offset];
-            if (!field || field > advertisement->data_length - offset - 1)
-                break;
-            uint8_t type = advertisement->data[offset + 1];
-            size_t uuid_size = type == 0x16 ? 2 : type == 0x20 ? 4 : type == 0x21 ? 16 : 0;
-            if (uuid_size && field > uuid_size + 1 &&
-                (!service_uuid_length ||
-                 (service_uuid_length == uuid_size &&
-                  service_uuid_equal(advertisement->data + offset + 2, service_uuid, uuid_size)))) {
-                *payload_type = "service";
-                return (byte_span){.bytes = advertisement->data + offset + 2 + uuid_size,
-                                   .length = field - 1 - uuid_size};
-            }
-            offset += field + 1;
-        }
-    } else {
-        const uint8_t *value = NULL;
-        size_t length = 0;
-        if (nm_ble_ad_field(advertisement->data, advertisement->data_length, 0xff, company, &value,
-                            &length)) {
-            *payload_type = "manufacturer";
-            return (byte_span){.bytes = value, .length = length};
-        }
-    }
-    /* Match .NET's fallback to raw scan data when the selected field is absent. */
-    *payload_type = "raw";
-    return (byte_span){.bytes = advertisement->data, .length = advertisement->data_length};
-}
-
-static bool decrypt_payload(const char *format, byte_span payload, const uint8_t *key,
-                            size_t key_length, unsigned nonce_len, unsigned tag_len,
-                            bool nonce_at_end, uint8_t output[NM_BLE_ADVERTISEMENT_MAX],
-                            byte_span *plaintext)
-{
-    if (!payload.bytes || !payload.length)
-        return false;
-    if (!strcmp(format, "raw")) {
-        *plaintext = payload;
-        return true;
-    }
-    if (!key_length || nonce_len == 0 || nonce_len > 16 || payload.length <= nonce_len)
-        return false;
-    const uint8_t *nonce =
-        nonce_at_end ? payload.bytes + payload.length - nonce_len : payload.bytes;
-    const uint8_t *cipher = nonce_at_end ? payload.bytes : payload.bytes + nonce_len;
-    size_t cipher_len = payload.length - nonce_len;
-    if (!strcmp(format, "aesgcm")) {
-        if (tag_len < 12 || tag_len > 16 || cipher_len <= tag_len)
-            return false;
-        const uint8_t *tag =
-            nonce_at_end ? cipher + cipher_len - tag_len : payload.bytes + payload.length - tag_len;
-        cipher_len -= tag_len;
-        if (cipher_len + tag_len > NM_BLE_ADVERTISEMENT_MAX ||
-            (key_length != 16 && key_length != 24 && key_length != 32))
-            return false;
-        uint8_t ciphertext_and_tag[NM_BLE_ADVERTISEMENT_MAX];
-        memcpy(ciphertext_and_tag, cipher, cipher_len);
-        memcpy(ciphertext_and_tag + cipher_len, tag, tag_len);
-        psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
-        psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
-        psa_set_key_bits(&attributes, key_length * 8);
-        psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_DECRYPT);
-        psa_algorithm_t algorithm = PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_GCM, tag_len);
-        psa_set_key_algorithm(&attributes, algorithm);
-        mbedtls_svc_key_id_t handle = PSA_KEY_ID_NULL;
-        psa_status_t status = psa_import_key(&attributes, key, key_length, &handle);
-        psa_reset_key_attributes(&attributes);
-        size_t output_length = 0;
-        if (status == PSA_SUCCESS)
-            status = psa_aead_decrypt(handle, algorithm, nonce, nonce_len, NULL, 0,
-                                      ciphertext_and_tag, cipher_len + tag_len, output,
-                                      NM_BLE_ADVERTISEMENT_MAX, &output_length);
-        if (handle != PSA_KEY_ID_NULL)
-            psa_destroy_key(handle);
-        if (status != PSA_SUCCESS || output_length != cipher_len)
-            return false;
-    } else if (!strcmp(format, "aesctr")) {
-        uint8_t counter[16] = {0}, stream[16];
-        memcpy(counter, nonce, nonce_len);
-        for (size_t offset = 0; offset < cipher_len; offset += 16) {
-            if (!aes_ecb_encrypt_block(key, key_length, counter, stream))
-                return false;
-            size_t block = cipher_len - offset < 16 ? cipher_len - offset : 16;
-            for (size_t i = 0; i < block; ++i)
-                output[offset + i] = cipher[offset + i] ^ stream[i];
-            for (int i = 15; i >= 12; --i)
-                if (++counter[i])
-                    break;
-        }
-    } else
-        return false;
-    *plaintext = (byte_span){.bytes = output, .length = cipher_len};
-    return true;
-}
-
 static void append_text(char *out, size_t capacity, size_t *used, const char *format, ...)
 {
     if (*used >= capacity)
@@ -557,7 +246,7 @@ static nm_esp_result listen_snapshot(const nm_monitor_record *monitor,
                                          "BLE scanner unavailable or captured history incomplete");
     uint8_t uuid[16] = {0};
     size_t uuid_length = 0;
-    if (!parse_service_uuid(service, uuid, &uuid_length))
+    if (!nm_ble_payload_parse_service_uuid(service, uuid, &uuid_length))
         return invalid;
     int selected_company = -1;
     if (*company) {
@@ -604,7 +293,7 @@ static nm_esp_result listen_snapshot(const nm_monitor_record *monitor,
         uint64_t sequence = 0;
         int64_t received_us = 0;
         if (injected) {
-            if (!parse_hex_payload(raw, item.data, &item.data_length)) {
+            if (!nm_ble_payload_parse_hex_payload(raw, item.data, &item.data_length)) {
                 nm_esp_result_release(&result);
                 return invalid;
             }
@@ -616,8 +305,8 @@ static nm_esp_result listen_snapshot(const nm_monitor_record *monitor,
         }
         const char *type = injected ? "raw_input" : "raw";
         byte_span payload = injected ? (byte_span){item.data, item.data_length}
-                                     : advertisement_payload(&item, &type, selected_company, mode,
-                                                             uuid, uuid_length);
+                                     : nm_ble_payload_advertisement_payload(
+                                           &item, &type, selected_company, mode, uuid, uuid_length);
         if (!payload.length)
             continue;
         if (!append_capture(result.detail_message, capacity, &used, &item, type, payload)) {
@@ -676,7 +365,7 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
         return listen_snapshot(monitor, snapshot);
     nm_ble_filter filter = {.company = -1};
     /* Targeted connects require an advertiser MAC. Raw listen returned above. */
-    if (!monitor || !normalize_address(monitor->Address, filter.address)) {
+    if (!monitor || !nm_ble_payload_normalize_address(monitor->Address, filter.address)) {
         nm_esp_result invalid = {.elapsed_ms = 0};
         snprintf(invalid.status, sizeof(invalid.status), "Exception");
         snprintf(invalid.message, sizeof(invalid.message),
@@ -725,7 +414,7 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
     int has_address = option_value(arguments, "--address", address_option, sizeof(address_option));
     int has_key = option_value(arguments, "--key", key_option, sizeof(key_option));
     if (has_address < 0 || has_key < 0 ||
-        (has_address && !normalize_address(address_option, filter.address))) {
+        (has_address && !nm_ble_payload_normalize_address(address_option, filter.address))) {
         snprintf(invalid.message, sizeof(invalid.message), "Invalid BLE address/key option");
         return invalid;
     }
@@ -759,7 +448,7 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
     }
     uint8_t key[BLE_KEY_MAX] = {0};
     size_t key_length = 0;
-    if (!parse_key(has_key ? key_option : monitor->Password, key, &key_length)) {
+    if (!nm_ble_payload_parse_key(has_key ? key_option : monitor->Password, key, &key_length)) {
         snprintf(
             invalid.message, sizeof(invalid.message), "%s",
             !strcmp(format, "victron")
@@ -773,14 +462,15 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
     }
     uint8_t uuid[16] = {0};
     size_t uuid_length = 0;
-    if (!parse_service_uuid(service_uuid, uuid, &uuid_length)) {
+    if (!nm_ble_payload_parse_service_uuid(service_uuid, uuid, &uuid_length)) {
         snprintf(invalid.message, sizeof(invalid.message), "Invalid BLE service_uuid");
         return invalid;
     }
     uint8_t injected_bytes[NM_BLE_ADVERTISEMENT_MAX];
     size_t injected_length = 0;
     bool injected = raw_payload[0] != '\0';
-    if (injected && !parse_hex_payload(raw_payload, injected_bytes, &injected_length)) {
+    if (injected &&
+        !nm_ble_payload_parse_hex_payload(raw_payload, injected_bytes, &injected_length)) {
         snprintf(invalid.message, sizeof(invalid.message), "Raw payload must be hex (even length)");
         return invalid;
     }
@@ -896,10 +586,11 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
             }
         }
         const char *payload_type = injected ? "raw_input" : "raw";
-        byte_span payload = injected
-                                ? (byte_span){advertisement.data, advertisement.data_length}
-                                : advertisement_payload(&advertisement, &payload_type,
-                                                        selected_company, mode, uuid, uuid_length);
+        byte_span payload =
+            injected
+                ? (byte_span){advertisement.data, advertisement.data_length}
+                : nm_ble_payload_advertisement_payload(&advertisement, &payload_type,
+                                                       selected_company, mode, uuid, uuid_length);
         if (!payload.length) {
 #ifdef ESP_PLATFORM
             ++payload_missing;
@@ -1009,11 +700,25 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
         char value[48];
         snprintf(value, sizeof(value), "%.6f", mean);
         char *end = value + strlen(value) - 1;
-        while (end > value && *end == '0') *end-- = '\0';
-        if (*end == '.') *end = '\0';
+        while (end > value && *end == '0')
+            *end-- = '\0';
+        if (*end == '.')
+            *end = '\0';
+        char label[sizeof(metric)];
+        snprintf(label, sizeof(label), "%s", nm_ble_metric_canonical(metric));
+        bool word_start = true;
+        for (char *p = label; *p; ++p) {
+            if (*p == '_') {
+                *p = ' ';
+                word_start = true;
+            } else {
+                if (word_start)
+                    *p = (char)toupper((unsigned char)*p);
+                word_start = false;
+            }
+        }
         snprintf(result.message, sizeof(result.message),
-                 "%s Last observed value for this data set: %s=%s %s; sample=%u; scale=%g; offset=%g",
-                 result.status, nm_ble_metric_canonical(metric), value,
+                 "%s %s: %s %s; sample=%u; scale=%g; offset=%g", result.status, label, value,
                  result.measurement_unit ? result.measurement_unit : "", sample,
                  result.measurement_scale, result.measurement_offset);
         free(latest);
@@ -1031,12 +736,13 @@ static nm_esp_result check_snapshot(const nm_monitor_record *monitor, uint64_t t
     const char *payload_type = injected ? "raw_input" : "raw";
     byte_span payload =
         injected ? (byte_span){.bytes = advertisement.data, .length = advertisement.data_length}
-                 : advertisement_payload(&advertisement, &payload_type, selected_company, mode,
-                                         uuid, uuid_length);
+                 : nm_ble_payload_advertisement_payload(&advertisement, &payload_type,
+                                                        selected_company, mode, uuid, uuid_length);
     uint8_t plaintext_bytes[NM_BLE_ADVERTISEMENT_MAX];
     byte_span plaintext = {0};
-    bool decrypted = decrypt_payload(format, payload, key, key_length, nonce_len, tag_len,
-                                     !strcmp(nonce_at, "end"), plaintext_bytes, &plaintext);
+    bool decrypted =
+        nm_ble_payload_decrypt_payload(format, payload, key, key_length, nonce_len, tag_len,
+                                       !strcmp(nonce_at, "end"), plaintext_bytes, &plaintext);
     if (!decrypted)
         plaintext = payload;
     size_t used = 0;

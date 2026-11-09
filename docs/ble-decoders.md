@@ -100,11 +100,13 @@ RF. Service normalization accepts the Bluetooth base UUID in 16-, 32- or
 Targeted Victron fails early if its key is missing. Invalid live decodes are
 ignored while considering the rest of the snapshot; invalid explicit overrides
 return an error. Selected numeric values are averaged before encoding using the
-shared v2 metric catalogue. The latest successfully decoded text stays intact;
-solar short summaries retain semicolon formatting and full diagnostics use
-lines. Raw listen succeeds at zero captures and does no decryption. Old format,
+shared v2 metric catalogue. The monitoring message shows only the selected recorded reading and its encoding,
+for example `Temperature: 10 °C; sample=...; scale=...; offset=...`, matching
+NetworkMonitorLib. It does not label the window measurement as the latest reading
+or include the complete decoded advertisement. Command reports retain full decode diagnostics. Raw listen succeeds at zero captures and does no decryption. Old format,
 crypto and max-capture arguments are accepted for existing configurations but
-ignored by raw listen. BLE command processors remain unsupported.
+ignored by raw listen. The `BleBroadcast` and `BleBroadcastListen` commands now reuse these decoders
+and the shared snapshot; see [command support](command-processor-port-notes.md#ble-command-processors).
 
 ## Continuous-buffer regression procedure
 
