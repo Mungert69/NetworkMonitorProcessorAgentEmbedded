@@ -192,7 +192,7 @@ Emit("manifest.json", new
 {
     SchemaVersion = 1,
     Generator = "tests/dotnet/JsonParity",
-    TargetFramework = "net10.0",
+    TargetFramework = "net11.0",
     RuntimeVersion = Environment.Version.ToString(),
     Serializer = "System.Text.Json",
     SerializerAssemblyVersion = typeof(JsonSerializer).Assembly.GetName().Version!.ToString(),

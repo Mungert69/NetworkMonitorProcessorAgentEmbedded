@@ -1,10 +1,10 @@
 {
   "SchemaVersion": 1,
   "Generator": "tests/dotnet/JsonParity",
-  "TargetFramework": "net10.0",
-  "RuntimeVersion": "10.0.12",
+  "TargetFramework": "net11.0",
+  "RuntimeVersion": "11.0.0",
   "Serializer": "System.Text.Json",
-  "SerializerAssemblyVersion": "10.0.0.0",
+  "SerializerAssemblyVersion": "11.0.0.0",
   "Profile": {
     "PropertyNamingPolicy": "none (PascalCase CLR property names)",
     "PropertyNameCaseInsensitive": false,
@@ -18,7 +18,7 @@
     "WriteIndented": true
   },
   "SourceRepository": "NetworkMonitorLib (sibling checkout)",
-  "SourceCommit": "224d3eae5f325af3c22075399dfa0040e68a2002",
+  "SourceCommit": "47aa09b116888f9765e85ebb879bb97cb937f28f",
   "SourceWorkingTreeStatus": "",
   "Sources": [
     {
