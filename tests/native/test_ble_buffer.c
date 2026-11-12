@@ -192,6 +192,65 @@ static void long_windows_and_rules(void)
     nm_ble_snapshot_release(s);
     clean();
 }
+static void capacity_limit_and_recovery(void)
+{
+    nm_ble_advertisement p = advertisement("AA:BB:CC:DD:EE:FF");
+    p.data_length = NM_BLE_ADVERTISEMENT_MAX;
+    nm_ble_buffer_rules_begin();
+    assert(nm_ble_buffer_protect(p.address, 70000));
+    size_t accepted = 0;
+    while (true) {
+        /* Every packet has a distinct maximum-size payload. */
+        p.data[0] = (uint8_t)accepted;
+        p.data[1] = (uint8_t)(accepted >> 8);
+        if (!nm_ble_buffer_receive(&p, (int64_t)accepted))
+            break;
+        ++accepted;
+    }
+    assert(accepted > 2500);
+    nm_ble_buffer_stats stats = nm_ble_buffer_get_stats();
+    assert(stats.dropped == 1 && stats.bytes < NM_BLE_BUFFER_MAX_OWNED_BYTES);
+
+    assert(nm_ble_buffer_complete_cycle((int64_t)accepted));
+    nm_ble_snapshot *full = nm_ble_buffer_acquire();
+    assert(nm_ble_snapshot_count(full) == accepted);
+    assert(nm_ble_snapshot_incomplete(full));
+    nm_ble_snapshot_release(full);
+    assert(nm_ble_buffer_get_stats().bytes <= NM_BLE_BUFFER_MAX_OWNED_BYTES);
+    assert(nm_ble_buffer_complete_cycle((int64_t)accepted + 1));
+
+    /* Remove protection. The first cycle evicts live history after
+     * publishing it; the second replaces that snapshot and reclaims it. */
+    nm_ble_buffer_rules_begin();
+    assert(nm_ble_buffer_complete_cycle((int64_t)accepted + 2));
+    assert(nm_ble_buffer_complete_cycle((int64_t)accepted + 3));
+    assert(nm_ble_buffer_get_stats().bytes < 1024);
+    p.data[0]++;
+    assert(nm_ble_buffer_receive(&p, (int64_t)accepted + 4));
+    clean();
+}
+static void rotating_addresses_are_bounded(void)
+{
+    nm_ble_advertisement p = advertisement("00:00:00:00:00:00");
+    size_t accepted = 0;
+    while (true) {
+        snprintf(p.address, sizeof(p.address), "02:%02X:%02X:%02X:%02X:%02X",
+                 (unsigned)((accepted >> 32) & 0xff), (unsigned)((accepted >> 24) & 0xff),
+                 (unsigned)((accepted >> 16) & 0xff), (unsigned)((accepted >> 8) & 0xff),
+                 (unsigned)(accepted & 0xff));
+        if (!nm_ble_buffer_receive(&p, (int64_t)accepted))
+            break;
+        ++accepted;
+    }
+    assert(accepted > 2500);
+    nm_ble_buffer_stats stats = nm_ble_buffer_get_stats();
+    assert(stats.dropped == 1 && stats.bytes < NM_BLE_BUFFER_MAX_OWNED_BYTES);
+    assert(nm_ble_buffer_complete_cycle((int64_t)accepted));
+    assert(nm_ble_buffer_get_stats().bytes <= NM_BLE_BUFFER_MAX_OWNED_BYTES);
+    assert(nm_ble_buffer_complete_cycle((int64_t)accepted + 1));
+    assert(nm_ble_buffer_get_stats().bytes < 1024);
+    clean();
+}
 static void failures(void)
 {
     nm_ble_advertisement p = advertisement("AA:BB:CC:DD:EE:FF");
@@ -275,6 +334,8 @@ int main(void)
     repeated_payload_storage();
     lifetime_and_eviction();
     long_windows_and_rules();
+    capacity_limit_and_recovery();
+    rotating_addresses_are_bounded();
     failures();
     concurrent();
     puts("BLE buffer ownership, eviction, failure and concurrency tests passed");

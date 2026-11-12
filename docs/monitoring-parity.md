@@ -81,13 +81,14 @@ ESP32 packet bytes, address histories, snapshot indexes and diagnostic buffers
 use PSRAM. Reference counts keep packets alive for existing readers even after
 live eviction or snapshot replacement; no borrowed mutable packet data escapes.
 A service mutex protects writes/publication, and readers copy immutable bytes.
-There is no configured capacity cap. Allocation failure preserves existing
-history and reports incomplete capture as a local inconclusive result rather
-than a false host-down observation. Failed snapshot allocation skips eviction;
+BLE-owned history and snapshot data have a fixed 1 MiB limit. Packet admission
+reserves the complete next snapshot within that limit, so capacity rejection
+cannot prevent publication and eviction. Capacity or allocation failure
+preserves existing history and reports incomplete capture as a local inconclusive
+result rather than a false host-down observation. Failed snapshot allocation skips eviction;
 failed rule allocation skips all eviction until rules are rebuilt successfully.
 Packet-loss indication remains until the protected retention horizon expires.
-Memory/packet/snapshot/drop counters are available at DEBUG level per cycle. This policy is not
-an absolute memory bound in an arbitrarily busy RF environment.
+Memory/packet/snapshot/drop counters are available at DEBUG level per cycle.
 
 The ESP32 already drains its bounded worker pool before cycle completion;
 .NET instead attaches its snapshot to each asynchronous connect. These are

@@ -73,6 +73,30 @@ static int64_t loss_us;
 static uint64_t dropped;
 static atomic_size_t owned_bytes, owned_packets, owned_snapshots, owned_payloads;
 
+/* Caller holds the service lock. Reserve a complete next snapshot as part of
+ * every capture decision so reaching the limit cannot prevent publication and
+ * subsequent eviction. owned_packets is conservative when an older reader
+ * still pins packets, which is preferable to admitting memory we cannot bound. */
+static bool capture_budget_allows(size_t allocation_bytes, size_t added_packets)
+{
+    size_t bytes = atomic_load(&owned_bytes);
+    size_t packets = atomic_load(&owned_packets);
+    if (added_packets > SIZE_MAX - packets)
+        return false;
+    packets += added_packets;
+    if (packets > (SIZE_MAX - sizeof(nm_ble_snapshot)) / sizeof(packet *))
+        return false;
+    size_t snapshot_bytes = sizeof(nm_ble_snapshot) + packets * sizeof(packet *);
+    size_t snapshot_reservations = published ? 1 : 2;
+    if (snapshot_bytes > SIZE_MAX / snapshot_reservations)
+        return false;
+    snapshot_bytes *= snapshot_reservations;
+    if (allocation_bytes > NM_BLE_BUFFER_MAX_OWNED_BYTES ||
+        bytes > NM_BLE_BUFFER_MAX_OWNED_BYTES - allocation_bytes)
+        return false;
+    return snapshot_bytes <= NM_BLE_BUFFER_MAX_OWNED_BYTES - bytes - allocation_bytes;
+}
+
 bool nm_ble_buffer_init(void)
 {
 #ifdef ESP_PLATFORM
@@ -117,6 +141,10 @@ static address_history *find_address(const char *address)
     for (address_history *h = history; h; h = h->next)
         if (!strcmp(h->address, address))
             return h;
+    return NULL;
+}
+static address_history *add_address(const char *address)
+{
     address_history *h = nm_bulk_calloc(1, sizeof(*h));
     if (!h)
         return NULL;
@@ -178,6 +206,8 @@ bool nm_ble_buffer_protect(const char *input, uint64_t window_ms)
         return false;
     lock();
     address_history *h = find_address(address);
+    if (!h && capture_budget_allows(sizeof(*h), 0))
+        h = add_address(address);
     if (!h)
         rule_failure = gaps = true;
     else if (h->retention_ms < window_ms * 2)
@@ -204,6 +234,24 @@ bool nm_ble_buffer_receive(const nm_ble_advertisement *input, int64_t now)
         unlock();
         return true; /* Deliberate suppression, not capture/allocation failure. */
     }
+    payload *content = h && h->tail ? h->tail->content : NULL;
+    bool reuse_content = content && content->length == input->data_length &&
+                         !memcmp(content->bytes, input->data, input->data_length) &&
+                         atomic_load(&content->references) < UINT_MAX;
+    size_t allocation_bytes = sizeof(packet);
+    if (!h)
+        allocation_bytes += sizeof(address_history);
+    if (!reuse_content)
+        allocation_bytes += sizeof(payload) + input->data_length;
+    if (!capture_budget_allows(allocation_bytes, 1)) {
+        gaps = loss_valid = true;
+        loss_us = now;
+        ++dropped;
+        unlock();
+        return false;
+    }
+    if (!h)
+        h = add_address(address);
     packet *p = h ? nm_bulk_malloc(sizeof(*p)) : NULL;
     if (!p) {
         gaps = loss_valid = true;
@@ -212,10 +260,7 @@ bool nm_ble_buffer_receive(const nm_ble_advertisement *input, int64_t now)
         unlock();
         return false;
     }
-    payload *content = h->tail ? h->tail->content : NULL;
-    if (content && content->length == input->data_length &&
-        !memcmp(content->bytes, input->data, input->data_length) &&
-        atomic_load(&content->references) < UINT_MAX) {
+    if (reuse_content) {
         atomic_fetch_add(&content->references, 1);
     } else {
         content = nm_bulk_malloc(sizeof(*content) + input->data_length);
@@ -279,8 +324,13 @@ bool nm_ble_buffer_complete_cycle(int64_t now)
     for (address_history *h = history; h; h = h->next)
         for (packet *p = h->head; p; p = p->next)
             ++count;
-    nm_ble_snapshot *s = count <= (SIZE_MAX - sizeof(*s)) / sizeof(packet *)
-                             ? nm_bulk_malloc(sizeof(*s) + count * sizeof(packet *))
+    size_t snapshot_bytes = count <= (SIZE_MAX - sizeof(nm_ble_snapshot)) / sizeof(packet *)
+                                ? sizeof(nm_ble_snapshot) + count * sizeof(packet *)
+                                : SIZE_MAX;
+    size_t bytes = atomic_load(&owned_bytes);
+    nm_ble_snapshot *s = snapshot_bytes <= NM_BLE_BUFFER_MAX_OWNED_BYTES &&
+                                 bytes <= NM_BLE_BUFFER_MAX_OWNED_BYTES - snapshot_bytes
+                             ? nm_bulk_malloc(snapshot_bytes)
                              : NULL;
     if (!s) {
         publication_failed = true;
@@ -290,7 +340,7 @@ bool nm_ble_buffer_complete_cycle(int64_t now)
         unlock();
         return false;
     } /* No eviction on failed publication. */
-    atomic_fetch_add(&owned_bytes, sizeof(*s) + count * sizeof(packet *));
+    atomic_fetch_add(&owned_bytes, snapshot_bytes);
     atomic_fetch_add(&owned_snapshots, 1);
     uint64_t longest = 0;
     for (address_history *h = history; h; h = h->next)

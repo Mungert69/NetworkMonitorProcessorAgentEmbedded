@@ -6,7 +6,9 @@
 /* Internal service: PSRAM packets and immutable reference-counted snapshots.
  * All APIs synchronize internally. Caller owns acquired snapshots and must
  * release them on every path. Read copies one packet; no mutable bytes escape.
- * No capacity caps: allocation failure preserves history and marks a gap. */
+ * Total owned history/snapshot data is bounded. Admission reserves the next
+ * snapshot before accepting a packet; rejected capture marks an incomplete gap. */
+#define NM_BLE_BUFFER_MAX_OWNED_BYTES (1024U * 1024U)
 typedef struct nm_ble_snapshot nm_ble_snapshot;
 bool nm_ble_buffer_init(void);
 void nm_ble_buffer_set_available(bool available);
