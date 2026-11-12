@@ -19,7 +19,7 @@ code execution.
 
 No reproducible memory corruption, undefined behaviour, crash, or working exploit
 was found in the exercised camera, RTSP, JPEG/RTP, BLE, or existing native-test
-paths. The fuzz campaigns processed approximately 19.5 million inputs or sessions
+paths. The fuzz campaigns processed approximately 19.6 million inputs or sessions
 under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 The review did identify unbounded ownership growth in the passive BLE history as
@@ -153,6 +153,19 @@ Results:
 - combined: 2,365,702 sessions, with no target sanitizer failure, undefined
   behaviour report, reproducible crash, or demonstrated exploit.
 
+## MQTT command dispatcher mutation testing
+
+A new deterministic host mutation harness exercised the production
+`processor_commands.c` dispatcher with malformed and mutated JSON, duplicate
+fields, AuthKey variations, and `processorCommand`/`processorConnect` routing.
+It uses the recording downstream and crypto adapters from the existing native
+dispatcher test. The crypto adapter deliberately accepts signatures for this
+parser/dispatch campaign; cryptographic verification is outside this result.
+
+Result: 150,000 mutated inputs completed under AddressSanitizer and
+UndefinedBehaviorSanitizer without a sanitizer finding or crash. This does not
+replace or repeat the existing real-signature integration test.
+
 ## Firmware build and hardening verification
 
 The production configuration now selects strong compiler stack protection. The
@@ -193,9 +206,10 @@ build optimizations, concurrency schedules, or dependency internals are safe.
 
 ## Limitations
 
-- Fuzz harnesses and corpora were temporary files under `/tmp`; they were not added
-  to the repository. The commands, case counts, and results are recorded here, but
-  the exact campaigns are not currently reproducible from a clean checkout.
+- The harness sources for the camera XML, JPEG/RTP, BLE decoder, RTSP, and
+  dispatcher campaigns are now in `tests/security/fuzz/`, with build guidance in
+  its README. The large generated RTSP corpus and old executable artifacts remain
+  temporary; future runs can start with fresh bounded budgets and seeds.
 - Host sanitizers do not instrument ESP-IDF, radio firmware, ROM, or all third-party
   library internals, and do not reproduce ESP32-S3 memory layout or timing.
 - No physical-board fault injection, RF stress, long-duration soak, Wi-Fi driver
